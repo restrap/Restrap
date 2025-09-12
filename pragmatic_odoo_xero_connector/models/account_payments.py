@@ -154,7 +154,9 @@ class Account_Payment(models.Model):
         if self._context.get('cron'):
             xero_config = self.company_id
         else:
-            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            xero_config = self.company_id
+            if not xero_config:
+                xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         client_id = xero_config.xero_client_id
         client_secret = xero_config.xero_client_secret
 
@@ -189,7 +191,9 @@ class Account_Payment(models.Model):
     @api.model
     def create_payment_in_xero(self):
         """export payment to XERO"""
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids'):
             payments = self.browse(self._context.get('active_ids'))
         else:

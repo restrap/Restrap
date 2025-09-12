@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Xero Integration OAuth 2.0 REST API',
-    'version': '3.6',
+    'version': '3.20',
     'category': 'Services',
     'author': 'Pragmatic TechSoft Pvt Ltd.',
     'website': "www.pragtech.co.in",

@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from odoo import models, fields, api, _
@@ -123,12 +124,17 @@ class Invoice(models.Model):
             self.sale_purchase = 'purchase'
             if self.tax_state == 'inclusive':
                 self.inclusive = True
+            elif self.tax_state == 'no_tax':
+                self.sale_purchase = None
             else:
                 self.inclusive = False
+
         else:
             self.sale_purchase = 'sale'
             if self.tax_state == 'inclusive':
                 self.inclusive = True
+            elif self.tax_state == 'no_tax':
+                self.sale_purchase = None
             else:
                 self.inclusive = False
 
@@ -137,8 +143,9 @@ class Invoice(models.Model):
                 line_id.inclusive = True
             elif self.tax_state == 'exclusive':
                 line_id.inclusive = False
-            # if (self.tax_state == 'no_tax'):
-            #     line_id.inclusive = False
+            elif self.tax_state == 'no_tax':
+                line_id.tax_ids = [(5, 0, 0)]
+
 
     @api.model
     def prepare_invoice_export_line_dict(self, line):
@@ -506,19 +513,14 @@ class Invoice(models.Model):
                 currency_code = self.currency_id.name
                 vals.update({"CurrencyCode": currency_code})
             _logger.info('vals : {}'.format(vals))
-            # Filter currency rates based on the given date
-            # currency_rates = self.currency_id.rate_ids.filtered(lambda rate: self.invoice_date == rate.name)
-            # # If currency rate is found, update the vals dictionary
-            # if currency_rates:
-            #     vals["CurrencyRate"] = currency_rates[0].company_rate
-            if self.currency_id != company.currency_id:
-                date = self.date if company.invoice_bill_accounting_date else self.invoice_date
-                currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
-                if currency_rates:
-                    currency_rates = max(currency_rates).company_rate
-                else:
-                    currency_rates = 1
-                vals["CurrencyRate"] = currency_rates
+            # if self.currency_id != company.currency_id:
+            #     date = self.date if company.invoice_bill_accounting_date else self.invoice_date
+            #     currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
+            #     if currency_rates:
+            #         currency_rates = max(currency_rates).company_rate
+            #     else:
+            #         currency_rates = 1
+            #     vals["CurrencyRate"] = currency_rates
 
             return vals
 
@@ -639,6 +641,8 @@ class Invoice(models.Model):
         vals = {}
         lst_line = []
         origin_credit_note = ''
+        type = ''
+        _logger.info(f"Transaction  Type ======================================{self.move_type}")
         if self.move_type == 'in_invoice':
             type = 'ACCPAY'
         elif self.move_type == 'out_invoice':
@@ -1100,14 +1104,14 @@ class Invoice(models.Model):
         if self.currency_id:
             currency_code = self.currency_id.name
             vals.update({"CurrencyCode": currency_code})
-        if self.currency_id != company.currency_id:
-            date = self.date if company.invoice_bill_accounting_date else self.invoice_date
-            currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
-            if currency_rates:
-                currency_rates = max(currency_rates).company_rate
-            else:
-                currency_rates = 1
-            vals["CurrencyRate"] = currency_rates
+        # if self.currency_id != company.currency_id:
+        #     date = self.date if company.invoice_bill_accounting_date else self.invoice_date
+        #     currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
+        #     if currency_rates:
+        #         currency_rates = max(currency_rates).company_rate
+        #     else:
+        #         currency_rates = 1
+        #     vals["CurrencyRate"] = currency_rates
         # # Filter currency rates based on the given date
         # currency_rates = self.currency_id.rate_ids.filtered(lambda rate: self.invoice_date == rate.name)
         # # If currency rate is found, update the vals dictionary
@@ -1122,7 +1126,9 @@ class Invoice(models.Model):
     def exportInvoice(self, payment_export=None):
         """export account invoice to QBO"""
         headers = self.get_head()
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids') and not payment_export:
             invoice = self.browse(self._context.get('active_ids'))
         else:
@@ -1149,6 +1155,45 @@ class Invoice(models.Model):
                             if response_data.get('Invoices'):
                                 t.xero_invoice_number = response_data.get('Invoices')[0].get('InvoiceNumber')
                                 t.xero_invoice_id = response_data.get('Invoices')[0].get('InvoiceID')
+                                url = f"https://api.xero.com/api.xro/2.0/Invoices/{response_data.get('Invoices')[0].get('InvoiceID')}"
+                                get_response = self.company_id.get_data(url)
+                                data = json.loads(get_response.text)
+                                # EXPORT CURRENCY EXCHANGERATE PORTION
+                                if data.get("Invoices")[0].get("CurrencyCode") and xero_config.currency_id.name != \
+                                        data.get("Invoices")[0].get("CurrencyCode"):
+                                    currency = self.env['res.currency'].search(
+                                        [('name', '=', data.get("Invoices")[0].get("CurrencyCode"))], limit=1)
+                                    if not currency:
+                                        currency = t.company_id.currency_id
+                                    if currency and data.get("Invoices")[0].get("CurrencyRate"):
+                                        rate_id = []
+                                        for rate in currency.rate_ids:
+                                            rate_id.append(str(rate.name))
+                                        date_string = data.get("Invoices")[0].get('DateString')
+                                        date_object = datetime.datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
+                                        formatted_date = date_object.strftime('%Y-%m-%d')
+                                        if formatted_date in rate_id:
+                                            for rate in currency.rate_ids:
+                                                if str(rate.name) == formatted_date:
+                                                    if not rate.inverse_company_rate == data.get("Invoices")[0].get(
+                                                            "CurrencyRate"):
+                                                        # rate.inverse_company_rate = data.get(
+                                                        #     'CurrencyRate')
+                                                        rate.company_rate = data.get("Invoices")[0].get("CurrencyRate")
+                                        else:
+                                            self.env['res.currency.rate'].create({
+                                                'name': data.get("Invoices")[0].get('DateString'),
+                                                'company_rate': data.get("Invoices")[0].get("CurrencyRate"),
+                                                # 'inverse_company_rate': data.get('CurrencyRate'),
+                                                'currency_id': currency.id,
+                                                'company_id': self.env.company.id,
+                                            })
+                                        self._cr.commit()
+                                        # END PORTION
+
+
+
+
                                 if t.invoice_payment_term_id:
                                     history_val = {
                                         "HistoryRecords": [
@@ -1250,6 +1295,9 @@ class Invoice(models.Model):
             status = 'POSTED'
 
         narration = None
+        if not self.ref:
+            raise ValidationError(f"Add Reference For Journal Entry [{self.name}]")
+
         if self.ref:
             narration = self.ref
 
@@ -1404,7 +1452,9 @@ class Invoice(models.Model):
         if self._context.get('cron'):
             xero_config = self.company_id
         else:
-            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            xero_config = self.company_id
+            if not xero_config:
+                xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         client_id = xero_config.xero_client_id
         client_secret = xero_config.xero_client_secret
 
@@ -1460,17 +1510,19 @@ class Invoice(models.Model):
         for xero_config in companys:
             if xero_config.xero_client_id and xero_config.xero_client_secret:
                 xero_config.refresh_token()
+                invoice_id = self.env['account.move'].search([
+                    '|',
+                    '&', ('invoice_date', '>', xero_config.export_record_after), ('xero_invoice_id', '=', False),
+                    '&', ('date', '>', xero_config.export_record_after), ('xero_invoice_id', '=', False),
+                    ('state', '=', 'posted'),
+                    ('company_id', '=', xero_config.id)
+                ])
                 # invoice_id = self.env['account.move'].search(
-                #     ['|', '&', '&', ('invoice_date', '>', xero_config.export_record_after),
-                #      ('date', '>', xero_config.export_record_after),
+                #     ['&', '&', ('invoice_date', '>', xero_config.export_record_after),
                 #      ('xero_invoice_id', '=', False),
                 #      ('state', '=', 'posted'), ('company_id', '=', xero_config.id),
                 #      ])
-                invoice_id = self.env['account.move'].search(
-                    ['&', '&', ('invoice_date', '>', xero_config.export_record_after),
-                     ('xero_invoice_id', '=', False),
-                     ('state', '=', 'posted'), ('company_id', '=', xero_config.id),
-                     ])
+
 
                 if xero_config.skip_stock_journal_entry:
                     operation_type_list = [operation_type.type for operation_type in
@@ -1541,7 +1593,6 @@ class InvoiceLine(models.Model):
         lines = super(InvoiceLine, self).create(vals_list)
         to_process = lines.filtered(lambda
                                         line: line.move_id.journal_id.name == 'Vendor Bills' and line.product_id.type == 'product' and not line.xero_invoice_line_id)
-        print("to_processto_process",to_process)
 
         # Nothing to process, break.
         if not to_process:
