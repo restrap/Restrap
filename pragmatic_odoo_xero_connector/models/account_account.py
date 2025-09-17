@@ -78,7 +78,9 @@ class Account(models.Model):
         res_id_user = self.env['res.company'].search([])
 
         """export accounts to XERO"""
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids'):
             account = self.browse(self._context.get('active_ids'))
         else:
@@ -113,7 +115,9 @@ class Account(models.Model):
             self.create_account_main(account, xero_config)
 
     def get_head(self):
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         client_id = xero_config.xero_client_id
         client_secret = xero_config.xero_client_secret
 

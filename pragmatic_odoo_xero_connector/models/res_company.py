@@ -206,27 +206,91 @@ class ResCompany(models.Model):
                 else:
                     continue
 
+    # def refresh_token(self):
+    #     try:
+    #         if self._context.get('not_cron') == 1:
+    #             xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+    #             if not xero_id.id == self.env.user.company_id.id:
+    #                 raise ValidationError(
+    #                     "Selected Company Does not match current active company. Please change selected company or active company")
+    #         else:
+    #             if self:
+    #                 xero_id = self
+    #             else:
+    #                 xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+    #         if not xero_id:
+    #             user_obj = self.env['res.users'].browse(self._uid)
+    #             raise ValidationError(
+    #                 'Company not found for User Name : ' + user_obj.name + 'and User Id : ' + self._uid)
+
+    #         if not xero_id.xero_client_id:
+    #             raise ValidationError(_('Please defined the Client ID!'))
+
+    #         if not xero_id.xero_client_secret:
+    #             raise ValidationError(_('Please defined the Client Secret!'))
+
+    #         client_id = xero_id.xero_client_id
+    #         client_secret = xero_id.xero_client_secret
+    #         url = 'https://identity.xero.com/connect/token'
+    #         data = client_id + ":" + client_secret
+
+    #         encodedBytes = base64.b64encode(data.encode("utf-8"))
+    #         encodedStr = str(encodedBytes, "utf-8")
+
+    #         headers = {
+    #             'Authorization': "Basic " + encodedStr,
+    #             'Content-Type': 'application/x-www-form-urlencoded'
+    #         }
+
+    #         data_token = {
+    #             'grant_type': 'refresh_token',
+    #             'refresh_token': xero_id.refresh_token_xero,
+    #         }
+
+    #         access_token = requests.post(url, data=data_token, headers=headers)
+    #         parsed_token_response = json.loads(access_token.text)
+
+    #         _logger.info('\n\nResponse : \n\n{} {} '.format(access_token, parsed_token_response))
+
+    #         if parsed_token_response:
+    #             xero_id.refresh_token_xero = parsed_token_response.get('refresh_token')
+    #             xero_id.xero_oauth_token = parsed_token_response.get('access_token')
+
+    #             if access_token.status_code == 200:
+    #                 _logger.info(_("(UPDATE) - Token generated successfully"))
+
+    #             elif access_token.status_code == 401:
+    #                 _logger.info(
+    #                     _("Time Out.\nPlease Check Your Connection or error in application or refresh token..!!"))
+    #             elif access_token.status_code == 400:
+    #                 if parsed_token_response.get('error'):
+    #                     raise ValidationError(parsed_token_response.get('error'))
+    #     except Exception as e:
+    #         _logger.info("Error : %s" % e)
+    #         raise ValidationError("Error : %s" % e)
+    
     def refresh_token(self):
+        print("===============refresh_token-------------------------------")
+        self.ensure_one()  # Ensure one company record
         try:
-            if self._context.get('not_cron') == 1:
-                xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
-                if not xero_id.id == self.env.user.company_id.id:
-                    raise ValidationError(
-                        "Selected Company Does not match current active company. Please change selected company or active company")
-            else:
-                if self:
-                    xero_id = self
-                else:
-                    xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
-            if not xero_id:
-                user_obj = self.env['res.users'].browse(self._uid)
+            print("=== Starting Xero Token Refresh ===")
+
+            xero_id = self  # Always use self
+            print(f"Company: {xero_id.name} (ID: {xero_id.id})")
+            print(f"User Allowed Companies: {[c.id for c in self.env.user.company_ids]}")
+
+            if xero_id.id not in self.env.user.company_ids.ids:
+                print("❌ Access denied: user does not belong to this company")
                 raise ValidationError(
-                    'Company not found for User Name : ' + user_obj.name + 'and User Id : ' + self._uid)
+                    f"You do not have access to the company '{xero_id.name}'. Please switch the active company."
+                )
 
             if not xero_id.xero_client_id:
+                print("❌ Missing Client ID")
                 raise ValidationError(_('Please defined the Client ID!'))
 
             if not xero_id.xero_client_secret:
+                print("❌ Missing Client Secret")
                 raise ValidationError(_('Please defined the Client Secret!'))
 
             client_id = xero_id.xero_client_id
@@ -247,8 +311,12 @@ class ResCompany(models.Model):
                 'refresh_token': xero_id.refresh_token_xero,
             }
 
+            print("Sending request to Xero token endpoint...")
             access_token = requests.post(url, data=data_token, headers=headers)
             parsed_token_response = json.loads(access_token.text)
+
+            print(f"Response Status: {access_token.status_code}")
+            print("Token Response:", parsed_token_response)
 
             _logger.info('\n\nResponse : \n\n{} {} '.format(access_token, parsed_token_response))
 
@@ -257,15 +325,20 @@ class ResCompany(models.Model):
                 xero_id.xero_oauth_token = parsed_token_response.get('access_token')
 
                 if access_token.status_code == 200:
+                    print("✅ Token refreshed successfully")
                     _logger.info(_("(UPDATE) - Token generated successfully"))
 
                 elif access_token.status_code == 401:
+                    print("❌ Unauthorized - likely expired or wrong token")
                     _logger.info(
                         _("Time Out.\nPlease Check Your Connection or error in application or refresh token..!!"))
                 elif access_token.status_code == 400:
                     if parsed_token_response.get('error'):
+                        print(f"❌ Error from Xero: {parsed_token_response.get('error')}")
                         raise ValidationError(parsed_token_response.get('error'))
+
         except Exception as e:
+            print("⚠️ Exception occurred:", str(e))
             _logger.info("Error : %s" % e)
             raise ValidationError("Error : %s" % e)
 
@@ -386,9 +459,11 @@ class ResCompany(models.Model):
                                  'REVENUE': 'Cost of Revenue',
                                  'SALES': 'Income',
                                  'TERMLIAB': 'Non-current Liabilities',
+                                 'BANK': 'Bank account',
                                  }
             account_type_dict = {'asset_receivable': 'Receivable',
                                  'asset_cash': 'Bank and Cash',
+                                 'asset_cash': 'Bank account',
                                  'asset_current': 'Current Assets',
                                  'asset_non_current': 'Non-current Assets',
                                  'asset_prepayments': 'Prepayments',
@@ -664,18 +739,6 @@ class ResCompany(models.Model):
                 status = True
             ChildOptions = catgories[0].get('Options')
 
-        # if not group_id:
-        #     if categ.get('Name'):
-        #         group.update({
-        #             'name': categ.get('Name'),
-        #             'is_active': status,
-        #             'description': categ.get('Name'),
-        #             'xero_tracking_id': categ.get('TrackingCategoryID')
-        #         })
-        #         group_id = self.env['account.analytic.group'].create(group)
-        #         self._cr.commit()
-        #
-        #     _logger.info('\n\n Group Dict : %s \n\n' % group)
 
         if group_id:
             if categ.get('TrackingOptionID'):
@@ -1304,13 +1367,11 @@ class ResCompany(models.Model):
                                         accnt = self.create_categ_in_odoo(tracking_line, group_flag=0)
                                     if accnt:
                                         tax_line_ids['analytic_distribution'] = {accnt.id: 100.0}
-
                             if tax_line_ids:
                                 journal_entry['line_ids'].append((0, 0, tax_line_ids))
 
             if rec.get('Status') == 'POSTED':
                 # if not journal_object:
-
                 account_journal_id = self.env['account.move'].create(journal_entry)
                 account_journal_id.action_post()
                 self._cr.commit()
@@ -1382,6 +1443,22 @@ class ResCompany(models.Model):
                 line_ids['debit'] = line.get('TaxAmount')
             else:
                 line_ids['credit'] = abs(line.get('TaxAmount'))
+
+        tax_ids = [(6, 0, [])]
+        if line.get('TaxType'):
+            if lineAmountType == 'Inclusive':
+                acc_tax = self.env['account.tax'].search(
+                    [('xero_tax_type_id', '=', line.get('TaxType')), ('type_tax_use', '=', 'purchase'),
+                     ('price_include', '=', True), ('company_id', '=', self.id)], limit=1)
+                tax_ids = [(6, 0, [acc_tax.id])]
+            elif lineAmountType == 'Exclusive':
+                acc_tax = self.env['account.tax'].search(
+                    [('xero_tax_type_id', '=', line.get('TaxType')), ('type_tax_use', '=', 'purchase'),
+                     ('price_include', '=', False), ('company_id', '=', self.id)], limit=1)
+                tax_ids = [(6, 0, [acc_tax.id])]
+            if tax_ids:
+                line_ids['tax_ids'] = tax_ids
+
 
         if account_id is None:
             account_id = account_obj.search([('xero_account_id', '=', line.get('AccountID'))])
@@ -1877,12 +1954,12 @@ class ResCompany(models.Model):
                         if str(rate.name) == formatted_date:
                             if not rate.inverse_company_rate == cust.get(
                                     'CurrencyRate'):
-                                rate.inverse_company_rate = cust.get(
+                                rate.company_rate = cust.get(
                                     'CurrencyRate')
                 else:
                     self.env['res.currency.rate'].create({
                         'name': cust.get('DateString'),
-                        'inverse_company_rate': cust.get('CurrencyRate'),
+                        'company_rate': cust.get('CurrencyRate'),
                         'currency_id': currency.id,
                         'company_id': self.env.company.id,
                     })
@@ -1980,11 +2057,38 @@ class ResCompany(models.Model):
         _logger.info("Invoice Dictionary :----------------> %s ", dict_i)
 
         invoice_obj = self.env['account.move'].create(dict_i)
+        if invoice_obj:
+            if invoice_obj.state == 'draft':
+                invoice_obj.action_post()
+            _logger.info("Invoice Object created in odoo :  %s ", invoice_obj)
+
+            if cust.get('InvoiceNumber'):
+                _logger.info("Invoice Created Successfully...!!! INV NO = %s ", cust.get('InvoiceNumber'))
         if cust.get('Reference') and invoice_obj:
             order = self.env['sale.order'].search([('name', '=', cust.get('Reference'))], limit=1)
             if order:
                 for line in invoice_obj.invoice_line_ids:
                     line.write({'sale_line_ids': [(6, 0, order.order_line.ids)]})
+        if invoice_obj and cust.get('Payments'):
+            for xero_payment in cust.get('Payments'):
+                odoo_payment = self.env['account.payment'].search([
+                    ('xero_payment_id', '=', xero_payment.get('PaymentID'))
+                ], limit=1)
+
+                if odoo_payment:
+                    odoo_payment.write({'reconciled_invoice_ids': [(4, invoice_obj.id)]})
+
+                    invoice_lines = invoice_obj.line_ids.filtered(lambda l: l.account_id.reconcile and l.balance != 0)
+
+                    payment_lines = odoo_payment.move_id.line_ids.filtered(
+                        lambda l: l.account_id.reconcile and l.account_id in invoice_lines.mapped(
+                            'account_id') and l.balance != 0
+                    )
+
+                    if invoice_lines and payment_lines:
+                        payment_lines.write({'payment_id': odoo_payment.id})
+                        (invoice_lines + payment_lines).reconcile()
+
         self._cr.commit()
         if cust.get('InvoiceNumber'):
             purchase_obj = self.env['purchase.order'].search(
@@ -2004,13 +2108,7 @@ class ResCompany(models.Model):
                                 'purchase_order_id': purchase_obj.id
                             })
         self.env.cr.commit()
-        if invoice_obj:
-            if invoice_obj.state == 'draft':
-                invoice_obj.action_post()
-            _logger.info("Invoice Object created in odoo :  %s ", invoice_obj)
 
-            if cust.get('InvoiceNumber'):
-                _logger.info("Invoice Created Successfully...!!! INV NO = %s ", cust.get('InvoiceNumber'))
 
     @api.model
     def create_invoice_line(self, i, res_product, cust, invoice_type, tax_state):
@@ -2041,7 +2139,8 @@ class ResCompany(models.Model):
                     self.import_tracking_categories(analytic['TrackingCategoryID'])
                     analytic_obj = self.env['account.analytic.account'].search(
                         [('name', '=', analytic['Option']), ('xero_tracking_opt_id', '!=', False)], limit=1)
-                    analytic_id.update({analytic_obj.id: 100})
+                    if analytic_obj:
+                        analytic_id.update({analytic_obj.id: 100})
             dict_ol['analytic_distribution'] = analytic_id
 
         if i.get('TaxType'):
@@ -2539,7 +2638,8 @@ class ResCompany(models.Model):
                     self.import_tracking_categories(analytic['TrackingCategoryID'])
                     analytic_obj = self.env['account.analytic.account'].search(
                         [('name', '=', analytic['Option']), ('xero_tracking_opt_id', '!=', False)], limit=1)
-                    analytic_id.update({analytic_obj.id: 100})
+                    if analytic_id:
+                        analytic_id.update({analytic_obj.id: 100})
             dict_l['analytic_distribution'] = analytic_id
 
         if i.get('Quantity'):
@@ -3397,7 +3497,8 @@ class ResCompany(models.Model):
                     self.import_tracking_categories(analytic['TrackingCategoryID'])
                     analytic_obj = self.env['account.analytic.account'].search(
                         [('name', '=', analytic['Option']), ('xero_tracking_opt_id', '!=', False)], limit=1)
-                    analytic_id.update({analytic_obj.id: 100})
+                    if analytic_obj:
+                        analytic_id.update({analytic_obj.id: 100})
             dict_l['analytic_distribution'] = analytic_id
 
         if i.get('TaxType'):
@@ -3792,7 +3893,7 @@ class ResCompany(models.Model):
                 customer_exists = self.env['res.partner'].search(
                     [('name', '=', item.get('Name')), ('xero_cust_id', '=', False)], limit=1)
 
-                if not customer_exists:
+                if not customer_exists and item.get('EmailAddress'):
                     customer_exists = self.env['res.partner'].search(
                         [('email', '=', item.get('EmailAddress')), ('xero_cust_id', '=', False)], limit=1)
         else:
@@ -3804,7 +3905,7 @@ class ResCompany(models.Model):
                 customer_exists = self.env['res.partner'].search(
                     [('name', '=', item.get('Name')), ('xero_cust_id', '=', False)], limit=1)
 
-                if not customer_exists:
+                if not customer_exists and item.get('EmailAddress'):
                     customer_exists = self.env['res.partner'].search(
                         [('email', '=', item.get('EmailAddress')), ('xero_cust_id', '=', False)], limit=1)
 
@@ -4335,7 +4436,8 @@ class ResCompany(models.Model):
                     self.import_tracking_categories(analytic['TrackingCategoryID'])
                     analytic_obj = self.env['account.analytic.account'].search(
                         [('name', '=', analytic['Option']), ('xero_tracking_opt_id', '!=', False)], limit=1)
-                    analytic_id.update({analytic_obj.id: 100})
+                    if analytic_id:
+                        analytic_id.update({analytic_obj.id: 100})
             dict_ol['analytic_distribution'] = analytic_id
 
         if i.get('TaxType'):
@@ -5483,10 +5585,12 @@ class AccountJournal(models.Model):
     _inherit = 'account.journal'
 
     def get_journal_from_account(self, xero_account_code):
-        res_id_user = self.env['res.company'].search([])
+        xero_config = self.env.company
+        if not xero_config:
+            res_id_user = self.env['res.company'].search([])
 
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
-        _logger.info('\n\nXero Acount code for Find Journal : \n\n{}\n\n'.format(xero_account_code))
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            _logger.info('\n\nXero Acount code for Find Journal : \n\n{}\n\n'.format(xero_account_code))
         account_id = self.env['account.account'].search(
             [('code', '=', xero_account_code), ('company_id', '=', xero_config.id)])
         account = self.env['account.account'].browse(account_id)

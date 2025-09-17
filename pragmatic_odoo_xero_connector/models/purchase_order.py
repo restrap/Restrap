@@ -1,3 +1,4 @@
+
 from odoo import models, fields, api,_
 from odoo.exceptions import ValidationError
 import requests
@@ -70,7 +71,9 @@ class PurchaseOrder(models.Model):
 
     @api.model
     def prepare_purchaseorder_export_dict(self):
-        company = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        company = self.company_id
+        if not company:
+            company = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
 
         if self.partner_id:
             cust_id = self.env['res.partner'].get_xero_partner_ref(self.partner_id)
@@ -201,10 +204,13 @@ class PurchaseOrder(models.Model):
         return vals
 
     def get_head(self):
+
         if self._context.get('cron'):
             xero_config = self.company_id
         else:
-            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            xero_config = self.company_id
+            if not xero_config:
+                xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         client_id = xero_config.xero_client_id
         client_secret = xero_config.xero_client_secret
 
@@ -223,7 +229,9 @@ class PurchaseOrder(models.Model):
     @api.model
     def exportPurchaseOrder(self):
         """export purchase order to QBO"""
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids'):
             purchase = self.browse(self._context.get('active_ids'))
         else:
@@ -325,7 +333,7 @@ class PurchaseOrder(models.Model):
         for xero_config in companys:
             if xero_config.xero_client_id and xero_config.xero_client_secret:
                 xero_config.refresh_token()
-                purchase_id = self.env['purchase.order'].search([('date_approve', '>', xero_config.export_record_after),('company_id', '=', xero_config.id),('state', '=', 'purchase')])
+                purchase_id = self.env['purchase.order'].search([('date_approve', '>', xero_config.export_record_after),('company_id', '=', xero_config.id),('state', '=', 'purchase'),('xero_purchase_id', '=', False)])
                 for purchase in purchase_id:
                     purchase.exportPurchaseOrder()
             else:

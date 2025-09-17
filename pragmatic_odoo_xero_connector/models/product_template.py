@@ -190,7 +190,9 @@ class ProductProduct(models.Model):
     @api.model
     def create_product_in_xero(self):
         """export accounts to XERO"""
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids'):
             product = self.browse(self._context.get('active_ids'))
         else:
@@ -211,7 +213,9 @@ class ProductProduct(models.Model):
         }
 
     def get_head(self):
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         client_id = xero_config.xero_client_id
         client_secret = xero_config.xero_client_secret
 

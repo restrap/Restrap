@@ -43,7 +43,9 @@ class SaleOrder(models.Model):
         if self._context.get('not_cron') or self._context.get('cron'):
             xero_config = self.company_id
         else:
-            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            xero_config = self.company_id
+            if not xero_config:
+                xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         # client_id = xero_config.xero_client_id
         # client_secret = xero_config.xero_client_secret
 
@@ -84,8 +86,9 @@ class SaleOrder(models.Model):
     def create_quotation_in_xero(self):
 
         """export Quotations ODOO to XERO"""
-
-        xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+        xero_config = self.company_id
+        if not xero_config:
+            xero_config = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
         if self._context.get('active_ids'):
             quotation = self.browse(self._context.get('active_ids'))
         else:
