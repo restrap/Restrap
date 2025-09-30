@@ -1,4 +1,3 @@
-import datetime
 import re
 
 from odoo import models, fields, api, _
@@ -513,14 +512,19 @@ class Invoice(models.Model):
                 currency_code = self.currency_id.name
                 vals.update({"CurrencyCode": currency_code})
             _logger.info('vals : {}'.format(vals))
-            # if self.currency_id != company.currency_id:
-            #     date = self.date if company.invoice_bill_accounting_date else self.invoice_date
-            #     currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
-            #     if currency_rates:
-            #         currency_rates = max(currency_rates).company_rate
-            #     else:
-            #         currency_rates = 1
-            #     vals["CurrencyRate"] = currency_rates
+            # Filter currency rates based on the given date
+            # currency_rates = self.currency_id.rate_ids.filtered(lambda rate: self.invoice_date == rate.name)
+            # # If currency rate is found, update the vals dictionary
+            # if currency_rates:
+            #     vals["CurrencyRate"] = currency_rates[0].company_rate
+            if self.currency_id != company.currency_id:
+                date = self.date if company.invoice_bill_accounting_date else self.invoice_date
+                currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
+                if currency_rates:
+                    currency_rates = max(currency_rates).company_rate
+                else:
+                    currency_rates = 1
+                vals["CurrencyRate"] = currency_rates
 
             return vals
 
@@ -1104,14 +1108,14 @@ class Invoice(models.Model):
         if self.currency_id:
             currency_code = self.currency_id.name
             vals.update({"CurrencyCode": currency_code})
-        # if self.currency_id != company.currency_id:
-        #     date = self.date if company.invoice_bill_accounting_date else self.invoice_date
-        #     currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
-        #     if currency_rates:
-        #         currency_rates = max(currency_rates).company_rate
-        #     else:
-        #         currency_rates = 1
-        #     vals["CurrencyRate"] = currency_rates
+        if self.currency_id != company.currency_id:
+            date = self.date if company.invoice_bill_accounting_date else self.invoice_date
+            currency_rates = self.currency_id.rate_ids.filtered(lambda rate: date >= rate.name)
+            if currency_rates:
+                currency_rates = max(currency_rates).company_rate
+            else:
+                currency_rates = 1
+            vals["CurrencyRate"] = currency_rates
         # # Filter currency rates based on the given date
         # currency_rates = self.currency_id.rate_ids.filtered(lambda rate: self.invoice_date == rate.name)
         # # If currency rate is found, update the vals dictionary
@@ -1155,45 +1159,6 @@ class Invoice(models.Model):
                             if response_data.get('Invoices'):
                                 t.xero_invoice_number = response_data.get('Invoices')[0].get('InvoiceNumber')
                                 t.xero_invoice_id = response_data.get('Invoices')[0].get('InvoiceID')
-                                url = f"https://api.xero.com/api.xro/2.0/Invoices/{response_data.get('Invoices')[0].get('InvoiceID')}"
-                                get_response = self.company_id.get_data(url)
-                                data = json.loads(get_response.text)
-                                # EXPORT CURRENCY EXCHANGERATE PORTION
-                                if data.get("Invoices")[0].get("CurrencyCode") and xero_config.currency_id.name != \
-                                        data.get("Invoices")[0].get("CurrencyCode"):
-                                    currency = self.env['res.currency'].search(
-                                        [('name', '=', data.get("Invoices")[0].get("CurrencyCode"))], limit=1)
-                                    if not currency:
-                                        currency = t.company_id.currency_id
-                                    if currency and data.get("Invoices")[0].get("CurrencyRate"):
-                                        rate_id = []
-                                        for rate in currency.rate_ids:
-                                            rate_id.append(str(rate.name))
-                                        date_string = data.get("Invoices")[0].get('DateString')
-                                        date_object = datetime.datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
-                                        formatted_date = date_object.strftime('%Y-%m-%d')
-                                        if formatted_date in rate_id:
-                                            for rate in currency.rate_ids:
-                                                if str(rate.name) == formatted_date:
-                                                    if not rate.inverse_company_rate == data.get("Invoices")[0].get(
-                                                            "CurrencyRate"):
-                                                        # rate.inverse_company_rate = data.get(
-                                                        #     'CurrencyRate')
-                                                        rate.company_rate = data.get("Invoices")[0].get("CurrencyRate")
-                                        else:
-                                            self.env['res.currency.rate'].create({
-                                                'name': data.get("Invoices")[0].get('DateString'),
-                                                'company_rate': data.get("Invoices")[0].get("CurrencyRate"),
-                                                # 'inverse_company_rate': data.get('CurrencyRate'),
-                                                'currency_id': currency.id,
-                                                'company_id': self.env.company.id,
-                                            })
-                                        self._cr.commit()
-                                        # END PORTION
-
-
-
-
                                 if t.invoice_payment_term_id:
                                     history_val = {
                                         "HistoryRecords": [

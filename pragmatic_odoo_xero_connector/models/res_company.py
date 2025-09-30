@@ -206,91 +206,27 @@ class ResCompany(models.Model):
                 else:
                     continue
 
-    # def refresh_token(self):
-    #     try:
-    #         if self._context.get('not_cron') == 1:
-    #             xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
-    #             if not xero_id.id == self.env.user.company_id.id:
-    #                 raise ValidationError(
-    #                     "Selected Company Does not match current active company. Please change selected company or active company")
-    #         else:
-    #             if self:
-    #                 xero_id = self
-    #             else:
-    #                 xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
-    #         if not xero_id:
-    #             user_obj = self.env['res.users'].browse(self._uid)
-    #             raise ValidationError(
-    #                 'Company not found for User Name : ' + user_obj.name + 'and User Id : ' + self._uid)
-
-    #         if not xero_id.xero_client_id:
-    #             raise ValidationError(_('Please defined the Client ID!'))
-
-    #         if not xero_id.xero_client_secret:
-    #             raise ValidationError(_('Please defined the Client Secret!'))
-
-    #         client_id = xero_id.xero_client_id
-    #         client_secret = xero_id.xero_client_secret
-    #         url = 'https://identity.xero.com/connect/token'
-    #         data = client_id + ":" + client_secret
-
-    #         encodedBytes = base64.b64encode(data.encode("utf-8"))
-    #         encodedStr = str(encodedBytes, "utf-8")
-
-    #         headers = {
-    #             'Authorization': "Basic " + encodedStr,
-    #             'Content-Type': 'application/x-www-form-urlencoded'
-    #         }
-
-    #         data_token = {
-    #             'grant_type': 'refresh_token',
-    #             'refresh_token': xero_id.refresh_token_xero,
-    #         }
-
-    #         access_token = requests.post(url, data=data_token, headers=headers)
-    #         parsed_token_response = json.loads(access_token.text)
-
-    #         _logger.info('\n\nResponse : \n\n{} {} '.format(access_token, parsed_token_response))
-
-    #         if parsed_token_response:
-    #             xero_id.refresh_token_xero = parsed_token_response.get('refresh_token')
-    #             xero_id.xero_oauth_token = parsed_token_response.get('access_token')
-
-    #             if access_token.status_code == 200:
-    #                 _logger.info(_("(UPDATE) - Token generated successfully"))
-
-    #             elif access_token.status_code == 401:
-    #                 _logger.info(
-    #                     _("Time Out.\nPlease Check Your Connection or error in application or refresh token..!!"))
-    #             elif access_token.status_code == 400:
-    #                 if parsed_token_response.get('error'):
-    #                     raise ValidationError(parsed_token_response.get('error'))
-    #     except Exception as e:
-    #         _logger.info("Error : %s" % e)
-    #         raise ValidationError("Error : %s" % e)
-    
     def refresh_token(self):
-        print("===============refresh_token-------------------------------")
-        self.ensure_one()  # Ensure one company record
         try:
-            print("=== Starting Xero Token Refresh ===")
-
-            xero_id = self  # Always use self
-            print(f"Company: {xero_id.name} (ID: {xero_id.id})")
-            print(f"User Allowed Companies: {[c.id for c in self.env.user.company_ids]}")
-
-            if xero_id.id not in self.env.user.company_ids.ids:
-                print("❌ Access denied: user does not belong to this company")
+            if self._context.get('not_cron') == 1:
+                xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+                if not xero_id.id == self.env.user.company_id.id:
+                    raise ValidationError(
+                        "Selected Company Does not match current active company. Please change selected company or active company")
+            else:
+                if self:
+                    xero_id = self
+                else:
+                    xero_id = self.env['res.users'].search([('id', '=', self._uid)], limit=1).company_id
+            if not xero_id:
+                user_obj = self.env['res.users'].browse(self._uid)
                 raise ValidationError(
-                    f"You do not have access to the company '{xero_id.name}'. Please switch the active company."
-                )
+                    'Company not found for User Name : ' + user_obj.name + 'and User Id : ' + self._uid)
 
             if not xero_id.xero_client_id:
-                print("❌ Missing Client ID")
                 raise ValidationError(_('Please defined the Client ID!'))
 
             if not xero_id.xero_client_secret:
-                print("❌ Missing Client Secret")
                 raise ValidationError(_('Please defined the Client Secret!'))
 
             client_id = xero_id.xero_client_id
@@ -311,12 +247,8 @@ class ResCompany(models.Model):
                 'refresh_token': xero_id.refresh_token_xero,
             }
 
-            print("Sending request to Xero token endpoint...")
             access_token = requests.post(url, data=data_token, headers=headers)
             parsed_token_response = json.loads(access_token.text)
-
-            print(f"Response Status: {access_token.status_code}")
-            print("Token Response:", parsed_token_response)
 
             _logger.info('\n\nResponse : \n\n{} {} '.format(access_token, parsed_token_response))
 
@@ -325,20 +257,15 @@ class ResCompany(models.Model):
                 xero_id.xero_oauth_token = parsed_token_response.get('access_token')
 
                 if access_token.status_code == 200:
-                    print("✅ Token refreshed successfully")
                     _logger.info(_("(UPDATE) - Token generated successfully"))
 
                 elif access_token.status_code == 401:
-                    print("❌ Unauthorized - likely expired or wrong token")
                     _logger.info(
                         _("Time Out.\nPlease Check Your Connection or error in application or refresh token..!!"))
                 elif access_token.status_code == 400:
                     if parsed_token_response.get('error'):
-                        print(f"❌ Error from Xero: {parsed_token_response.get('error')}")
                         raise ValidationError(parsed_token_response.get('error'))
-
         except Exception as e:
-            print("⚠️ Exception occurred:", str(e))
             _logger.info("Error : %s" % e)
             raise ValidationError("Error : %s" % e)
 
@@ -1954,12 +1881,12 @@ class ResCompany(models.Model):
                         if str(rate.name) == formatted_date:
                             if not rate.inverse_company_rate == cust.get(
                                     'CurrencyRate'):
-                                rate.company_rate = cust.get(
+                                rate.inverse_company_rate = cust.get(
                                     'CurrencyRate')
                 else:
                     self.env['res.currency.rate'].create({
                         'name': cust.get('DateString'),
-                        'company_rate': cust.get('CurrencyRate'),
+                        'inverse_company_rate': cust.get('CurrencyRate'),
                         'currency_id': currency.id,
                         'company_id': self.env.company.id,
                     })
@@ -3884,6 +3811,7 @@ class ResCompany(models.Model):
 
     @api.model
     def create_imported_customers(self, item):
+        #Need to check
 
         if item.get('AccountNumber'):
             customer_exists = self.env['res.partner'].search(['|', ('active', '=', False),
@@ -4656,7 +4584,7 @@ class ResCompany(models.Model):
                                 invoice = self.env['account.move'].search(
                                     [('xero_invoice_id', '=', grp.get('Invoice').get('InvoiceID'))], limit=1)
                                 if invoice:
-                                    if not invoice.payment_state == 'paid':
+                                    if not invoice.payment_state == 'paid' and invoice.amount_residual > 0:
                                         if not grp.get('Status') == 'DELETED':
                                             self.create_imported_payments(grp)
                                 else:
@@ -4739,6 +4667,7 @@ class ResCompany(models.Model):
                     payment = self.env['account.payment'].search(
                         [('ref', '=', i.name), ('xero_payment_id', '=', False)], limit=1)
                     if payment and i.payment_state == 'paid':
+                        print("mymoduleeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
                         raise UserError(
                             _(f"You can't register a payment because there is nothing left to pay on the selected journal items. Invoice is {i.name}"))
 
