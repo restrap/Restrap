@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+        content="Hamdek Website Login Gate: members-only browsing, cart & checkout login rules, and menus hidden from guests—configured per website in Odoo 19.">
+    <meta name="keywords" content="Odoo, website, login, members only, ecommerce, cart, checkout, Hamdek">
+    <meta name="author" content="Hamdek">
+    <title>Hamdek Website Login Gate | Odoo 19</title>
+    <link rel="icon" href="icon.png" type="image/png">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" rel="stylesheet">
+</head>
+
+<body style="background-color:#fafafa;">
+
+    <div class="container text-center my-5">
+        <div class="d-flex justify-content-center gap-3 mb-4 flex-wrap">
+            <span class="badge bg-white text-dark rounded-pill shadow-sm border border-secondary">Login gate</span>
+            <span class="badge bg-white text-dark rounded-pill shadow-sm border border-secondary">Cart &amp; checkout</span>
+            <span class="badge bg-white text-dark rounded-pill shadow-sm border border-secondary">Menus</span>
+        </div>
+
+        <h1 class="fw-bold" style="color:#1F12D4;">Hamdek Website Login Gate</h1>
+        <p class="lead mt-3 w-75 mx-auto mb-0">
+            Turn your storefront into a <b>members-only website</b>, or keep it open and only require sign-in for
+            <b>cart</b>, <b>checkout</b>, or selected <b>menus</b>—all per website from <b>Hamdek Website Configuration</b> in Settings.
+        </p>
+    </div>
+
+    <div class="container my-5 p-4 rounded" style="background-color:#e8f4fd; border-width:1px; border-style:solid; border-color:#0d6efd;">
+        <h2 class="text-center mb-4 fw-bold" style="color:#1F12D4;">Why use it</h2>
+        <p class="text-center lead mb-4">
+            One module for <b>website access control</b>: optional <b>full-site login</b>, block cart actions until login,
+            redirect guests away from checkout with a <b>cart-style notification</b>, and hide navigation for anonymous visitors—without custom templates.
+        </p>
+        <div class="row g-4 justify-content-center">
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="card h-100 shadow-sm border-primary">
+                    <div class="card-body">
+                        <h5 class="card-title fw-semibold">One settings panel</h5>
+                        <p class="card-text text-muted small">Per website: toggles and menu picks live under Website → Settings → Hamdek Website Configuration.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="card h-100 shadow-sm border-primary">
+                    <div class="card-body">
+                        <h5 class="card-title fw-semibold">Same cart notifications</h5>
+                        <p class="card-text text-muted small">Restricted add-to-cart and checkout flows use the familiar shop warning toast—not a separate checkout login page.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3">
+                <div class="card h-100 shadow-sm border-primary">
+                    <div class="card-body">
+                        <h5 class="card-title fw-semibold">Reliable login screen</h5>
+                        <p class="card-text text-muted small">When full-site login is on, the classic email/password form is shown on /web/login so the page never stays blank.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container my-5">
+        <h2 class="text-center mb-4 fw-bold" style="color:#1F12D4;">Key Features</h2>
+        <div class="row g-4 justify-content-center">
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body" style="background-color:#facc15;">
+                        <h5 class="card-title fw-semibold">Browse / login gate</h5>
+                        <p class="card-text small">Optional: require sign-in before any storefront page; signup, password reset, TOTP, and payment return URLs stay available.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body" style="background-color:#facc15;">
+                        <h5 class="card-title fw-semibold">Cart &amp; checkout rules</h5>
+                        <p class="card-text small">Optional: require login to add or change cart contents; optional: require login at checkout (redirect to cart + notification).</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body" style="background-color:#facc15;">
+                        <h5 class="card-title fw-semibold">Menus hidden for visitors</h5>
+                        <p class="card-text small">Multi-select website menus to hide from logged-out users (children hidden with the parent).</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body" style="background-color:#facc15;">
+                        <h5 class="card-title fw-semibold">Hamdek Website Base</h5>
+                        <p class="card-text small">Shared “Hamdek Website Configuration” section so other Hamdek apps can extend the same block.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container my-5 p-4 rounded" style="background-color:#f7f3f6; border-width:1px; border-style:solid; border-color:#ddd;">
+        <h2 class="text-center mb-4 fw-bold" style="color:#1F12D4;">How to Get Started</h2>
+        <ol class="fs-5 mb-0 ps-3">
+            <li class="mb-2">Install <b>Hamdek Website Base</b> and <b>Hamdek Website Login Gate</b> (<code>hdk_website_login_gate</code>).</li>
+            <li class="mb-2">Open <b>Settings → Website</b>, select your website, then <b>Hamdek Website Configuration</b>.</li>
+            <li class="mb-2">Enable the rules you need and test in a private browser window as a guest.</li>
+        </ol>
+    </div>
+
+    <div class="container my-5">
+        <h2 class="text-center mb-3 fw-bold" style="color:#1F12D4;">Screenshots</h2>
+        <p class="text-center text-muted mb-5 mx-auto" style="max-width:720px;">
+            Configuration in Settings, cart notification when add-to-cart is restricted, checkout notification after redirect to cart, and menus hidden for visitors.
+        </p>
+
+        <div class="mb-5 pb-4 border-bottom">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-primary me-3 d-flex align-items-center justify-content-center" style="width:2.5rem; height:2.5rem; font-size:1.1rem;">1</span>
+                <h4 class="fw-semibold mb-0" style="color:#1F12D4;">Website configuration</h4>
+            </div>
+            <p class="text-muted ms-5 mb-3">Hamdek Website Configuration on the Website settings form: login gate, cart/checkout toggles, and menus hidden for visitors.</p>
+            <div class="ms-5 mt-3">
+                <img src="images/configuration.png" alt="Hamdek Website Configuration in Odoo Website settings" class="img-fluid rounded shadow-sm border" style="max-width:100%;">
+            </div>
+        </div>
+
+        <div class="mb-5 pb-4 border-bottom">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-primary me-3 d-flex align-items-center justify-content-center" style="width:2.5rem; height:2.5rem; font-size:1.1rem;">2</span>
+                <h4 class="fw-semibold mb-0" style="color:#1F12D4;">Add to cart (guest)</h4>
+            </div>
+            <p class="text-muted ms-5 mb-3">When “Require login to add to cart” is enabled, guests see the same cart-style notification instead of updating the cart.</p>
+            <div class="ms-5 mt-3">
+                <img src="images/add%20to%20cart%20error.png" alt="Cart notification when guest tries to add to cart" class="img-fluid rounded shadow-sm border" style="max-width:100%;">
+            </div>
+        </div>
+
+        <div class="mb-5 pb-4 border-bottom">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-primary me-3 d-flex align-items-center justify-content-center" style="width:2.5rem; height:2.5rem; font-size:1.1rem;">3</span>
+                <h4 class="fw-semibold mb-0" style="color:#1F12D4;">Checkout (guest)</h4>
+            </div>
+            <p class="text-muted ms-5 mb-3">When “Require login to start checkout” is enabled, opening checkout redirects to the cart and shows the checkout reminder notification.</p>
+            <div class="ms-5 mt-3">
+                <img src="images/checkout%20error.png" alt="Cart notification after guest tries to open checkout" class="img-fluid rounded shadow-sm border" style="max-width:100%;">
+            </div>
+        </div>
+
+        <div class="mb-5 pb-4">
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-circle bg-primary me-3 d-flex align-items-center justify-content-center" style="width:2.5rem; height:2.5rem; font-size:1.1rem;">4</span>
+                <h4 class="fw-semibold mb-0" style="color:#1F12D4;">Menus for visitors</h4>
+            </div>
+            <p class="text-muted ms-5 mb-3">Menus selected under “Menus hidden for visitors” disappear from the header for logged-out users.</p>
+            <div class="ms-5 mt-3">
+                <img src="images/menu%20invisible.png" alt="Website navigation with menus hidden for anonymous visitors" class="img-fluid rounded shadow-sm border" style="max-width:100%;">
+            </div>
+        </div>
+    </div>
+
+    <div class="container my-5 p-4 rounded text-white shadow" style="background-color:#1F12D4;">
+        <h2 class="text-center mb-4 fw-bold" style="color:#FFFFFF;">Support &amp; Expert Services</h2>
+        <div class="row text-center">
+            <div class="col-md-6 border-end border-light">
+                <i class="fa fa-envelope fs-1 mb-2" style="color:#facc15;"></i>
+                <p class="fs-5">admin@hamdek.com</p>
+            </div>
+            <div class="col-md-6">
+                <i class="fa fa-globe fs-1 mb-2" style="color:#facc15;"></i>
+                <p class="fs-5">
+                    <a class="text-white text-decoration-none" href="https://www.hamdek.com" target="_blank" rel="noopener">www.hamdek.com</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center py-4" style="background-color:#facc15; color:#000;">
+        <p class="mb-0 fw-semibold">&copy; 2026 Hamdek. All rights reserved.</p>
+    </footer>
+
+</body>
+
+</html>

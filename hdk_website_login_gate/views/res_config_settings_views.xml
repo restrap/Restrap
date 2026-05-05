@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_hdk_website_login_gate" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hdk.website.login.gate</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hdk_website_base.res_config_settings_view_form_hdk_website_base"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='module_hdk_website_base']" position="inside">
+                <setting
+                    string="Menus hidden for visitors"
+                    help="Pick website menus that must not appear when the user is not logged in. Submenus under a hidden menu are hidden as well."
+                    invisible="not website_id"
+                >
+                    <field
+                        name="hdk_menu_hide_public_ids"
+                        widget="many2many_tags"
+                        options="{'no_create': True}"
+                        domain="[('website_id', '=', website_id)]"
+                        placeholder="e.g. Shop, Events…"
+                    />
+                </setting>
+                <setting
+                    string="Require login to add to cart"
+                    help="Guests cannot add products or change quantities until they sign in."
+                    invisible="not website_id"
+                >
+                    <field name="hdk_login_required_add_to_cart"/>
+                </setting>
+                <setting
+                    string="Require login to start checkout"
+                    help="Guests who open checkout see the sign-in page first."
+                    invisible="not website_id"
+                >
+                    <field name="hdk_login_required_checkout"/>
+                </setting>
+                <setting
+                    string="Require login to browse the website"
+                    help="Only signed-in users can use the storefront. Sign up, reset password, TOTP, and payment return URLs remain available for guests."
+                    invisible="not website_id"
+                >
+                    <field name="hdk_login_required_website"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>
