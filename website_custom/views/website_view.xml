@@ -35,6 +35,15 @@
             <field name="perm_create" eval="0"/>
             <field name="perm_unlink" eval="0"/>
         </record>
+         <record id="access_stock_warehouse_portal" model="ir.model.access">
+            <field name="name">Access Stock Warehouse Portal</field>
+            <field name="model_id" ref="stock.model_stock_warehouse"/>
+            <field name="group_id" ref="base.group_portal"/>  <!-- Portal group -->
+            <field name="perm_read" eval="1"/>  <!-- Allow read access -->
+            <field name="perm_write" eval="0"/>
+            <field name="perm_create" eval="0"/>
+            <field name="perm_unlink" eval="0"/>
+        </record>
     </data>
 </odoo>
 </odoo>

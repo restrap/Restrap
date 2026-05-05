@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="payment_provider_form_payment_term" model="ir.ui.view">
+        <field name="name">payment.provider.form.payment.term</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='availability']" position="inside">
+                <field
+                    name="allowed_payment_term_id"
+                    options="{'no_create': True}"
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>
