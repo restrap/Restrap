@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <menuitem id="menu_production_dashboard"
-              name="Production Dashboard"
-              parent="mrp.menu_mrp_reporting"
-              action="action_production_dashboard"
-              sequence="5"/>
-</odoo>
