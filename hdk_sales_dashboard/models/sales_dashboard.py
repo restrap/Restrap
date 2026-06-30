@@ -114,8 +114,9 @@ class SalesDashboard(models.AbstractModel):
                 SELECT
                     r.*,
                     COALESCE(sm.minutes, 0) AS minutes,
-                    EXTRACT(EPOCH FROM (sc.paid_at - r.date_order::date))
-                        / 86400.0 AS cash_days
+                    -- date - date returns integer days in PostgreSQL,
+                    -- not an interval, so cast and divide directly.
+                    (sc.paid_at - r.date_order::date)::numeric AS cash_days
                 FROM so_in_range r
                 LEFT JOIN so_minutes sm ON sm.id = r.id
                 LEFT JOIN sale_order so ON so.id = r.id
