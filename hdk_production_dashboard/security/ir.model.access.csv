@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hdk_product_bom_time_user,hdk.product.bom.time user,model_hdk_product_bom_time,base.group_user,1,0,0,0
+access_hdk_product_bom_time_manager,hdk.product.bom.time manager,model_hdk_product_bom_time,mrp.group_mrp_manager,1,1,1,1

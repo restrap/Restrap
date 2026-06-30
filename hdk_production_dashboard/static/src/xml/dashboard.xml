@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hdk_production_dashboard.BarChart">
+        <div class="o_hdk_chart">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="o_hdk_chart_svg">
+                <line x1="0" y1="100" x2="100" y2="100" stroke="#e0e0e0" stroke-width="0.3"/>
+                <t t-foreach="bars" t-as="b" t-key="b_index">
+                    <rect t-att-x="b.x"
+                          t-att-y="b.y"
+                          t-att-width="b.width"
+                          t-att-height="b.height"
+                          fill="#0a6cff"
+                          class="o_hdk_bar">
+                        <title><t t-esc="b.label"/>: <t t-esc="b.hours"/> hrs</title>
+                    </rect>
+                </t>
+            </svg>
+            <div class="o_hdk_chart_axis">
+                <t t-foreach="bars" t-as="b" t-key="b_index">
+                    <span t-if="bars.length &lt;= 31 or b_index % 5 === 0"
+                          t-esc="b.label"
+                          t-att-style="'left:' + b.x + '%;width:' + b.width + '%'"/>
+                </t>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="hdk_production_dashboard.Dashboard">
+        <div class="o_hdk_dashboard">
+
+            <!-- Filter bar -->
+            <div class="o_hdk_filter_bar">
+                <div class="o_hdk_filter_left">
+                    <label>Date Type</label>
+                    <select t-model="state.date_type" t-on-change="() => this.onFilterChange()">
+                        <t t-foreach="dateOptions" t-as="opt" t-key="opt.value">
+                            <option t-att-value="opt.value" t-esc="opt.label"/>
+                        </t>
+                    </select>
+                    <label>From</label>
+                    <input type="date" t-model="state.date_from" t-on-change="() => this.onFilterChange()"/>
+                    <label>To</label>
+                    <input type="date" t-model="state.date_to" t-on-change="() => this.onFilterChange()"/>
+                </div>
+                <div class="o_hdk_filter_right">
+                    <span class="o_hdk_last_refresh" t-esc="refreshLabel"/>
+                    <button class="btn btn-secondary"
+                            t-att-disabled="state.refreshing"
+                            t-on-click="onRefreshCache">
+                        <i class="fa fa-refresh" t-att-class="state.refreshing ? 'fa-spin' : ''"/>
+                        <t t-if="state.refreshing"> Refreshing...</t>
+                        <t t-else=""> Refresh</t>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Range presets -->
+            <div class="o_hdk_presets">
+                <t t-foreach="presets" t-as="p" t-key="p.id">
+                    <button class="btn btn-sm"
+                            t-att-class="state.preset === p.id ? 'btn-primary' : 'btn-light'"
+                            t-on-click="() => this.onPresetClick(p.id)"
+                            t-esc="p.label"/>
+                </t>
+            </div>
+
+            <!-- Loading / error -->
+            <div t-if="state.loading" class="o_hdk_loading">
+                <i class="fa fa-spinner fa-spin fa-2x"/>
+                <p>Loading dashboard...</p>
+            </div>
+            <div t-elif="state.error" class="alert alert-danger">
+                <strong>Error:</strong> <t t-esc="state.error"/>
+            </div>
+
+            <t t-elif="state.data">
+                <!-- KPI summary cards -->
+                <div class="o_hdk_kpis">
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Total Orders</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtInt(state.data.totals.order_count)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Total Value</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtMoney(state.data.totals.order_value)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Total Hours</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtHours(state.data.totals.hours)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Avg Hours / Order</span>
+                        <span class="o_hdk_kpi_value">
+                            <t t-if="state.data.totals.order_count > 0"
+                               t-esc="fmtHours(state.data.totals.hours / state.data.totals.order_count)"/>
+                            <t t-else="">0.00</t>
+                        </span>
+                    </div>
+                    <div class="o_hdk_kpi o_hdk_kpi_warn" t-if="bottleneck">
+                        <span class="o_hdk_kpi_label">Bottleneck</span>
+                        <span class="o_hdk_kpi_value_sm">
+                            <t t-esc="bottleneck.name"/>
+                        </span>
+                        <span class="o_hdk_kpi_sub">
+                            <t t-esc="fmtHours(bottleneck.hours)"/> hrs
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Channel breakdown table -->
+                <div class="o_hdk_card">
+                    <div class="o_hdk_card_head">
+                        <h4>Channel Breakdown</h4>
+                        <small class="text-muted">Click any row to open the underlying orders.</small>
+                    </div>
+                    <table class="o_hdk_table">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th class="text-end">Orders</th>
+                                <th class="text-end">Value</th>
+                                <th class="text-end">Minutes</th>
+                                <th class="text-end">Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.channels" t-as="ch" t-key="ch.key"
+                                class="o_hdk_row_click"
+                                t-on-click="() => this.onChannelClick(ch)">
+                                <td>
+                                    <span class="o_hdk_dot" t-att-style="'background:' + colorFor(ch.name)"/>
+                                    <t t-esc="ch.name"/>
+                                    <span t-if="ch.kind === 'transfer'" class="badge text-bg-light ms-2">Stock</span>
+                                </td>
+                                <td class="text-end" t-esc="fmtInt(ch.order_count)"/>
+                                <td class="text-end" t-esc="fmtMoney(ch.order_value)"/>
+                                <td class="text-end" t-esc="fmtInt(Math.round(ch.minutes))"/>
+                                <td class="text-end fw-bold" t-esc="fmtHours(ch.hours)"/>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="o_hdk_total_row">
+                                <td><strong>Total</strong></td>
+                                <td class="text-end" t-esc="fmtInt(state.data.totals.order_count)"/>
+                                <td class="text-end" t-esc="fmtMoney(state.data.totals.order_value)"/>
+                                <td class="text-end" t-esc="fmtInt(Math.round(state.data.totals.minutes))"/>
+                                <td class="text-end fw-bold" t-esc="fmtHours(state.data.totals.hours)"/>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Incomplete BOM exception -->
+                <div class="o_hdk_card o_hdk_warn"
+                     t-if="state.data.incomplete.order_count > 0">
+                    <div class="o_hdk_card_head">
+                        <h4><i class="fa fa-exclamation-triangle text-warning"/> Incomplete BOMs</h4>
+                    </div>
+                    <p>
+                        <strong t-esc="fmtInt(state.data.incomplete.order_count)"/> orders contain
+                        <strong t-esc="fmtInt(state.data.incomplete.product_count)"/> products whose
+                        BOMs have zero operation time configured. These are
+                        <em>excluded</em> from the minutes/hours totals above. Fix the BOMs to include
+                        them in production planning.
+                    </p>
+                </div>
+
+                <!-- Workcenter load -->
+                <div class="o_hdk_card" t-if="topWorkcenters.length">
+                    <div class="o_hdk_card_head">
+                        <h4>Workcenter Load</h4>
+                        <small class="text-muted">Top 15 workcenters by required production time.</small>
+                    </div>
+                    <div class="o_hdk_wc_list">
+                        <t t-foreach="topWorkcenters" t-as="w" t-key="w.workcenter_id">
+                            <div class="o_hdk_wc_row">
+                                <span class="o_hdk_wc_name" t-esc="w.name"/>
+                                <div class="o_hdk_wc_bar_wrap">
+                                    <div class="o_hdk_wc_bar" t-att-style="'width:' + w.pct + '%'"/>
+                                </div>
+                                <span class="o_hdk_wc_hours"><t t-esc="fmtHours(w.hours)"/> hrs</span>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+
+                <!-- Daily trend chart -->
+                <div class="o_hdk_card" t-if="state.data.daily_trend.points.length">
+                    <div class="o_hdk_card_head">
+                        <h4>Production Time Trend</h4>
+                        <small class="text-muted">
+                            Hours required, bucketed by <t t-esc="state.data.daily_trend.bucket"/>.
+                        </small>
+                    </div>
+                    <BarChart points="state.data.daily_trend.points"
+                              bucket="state.data.daily_trend.bucket"/>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>
