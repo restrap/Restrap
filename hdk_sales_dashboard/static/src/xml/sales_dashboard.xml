@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hdk_sales_dashboard.Dashboard">
+        <div class="o_hdk_dashboard o_hdk_sales">
+
+            <div class="o_hdk_filter_bar">
+                <div class="o_hdk_filter_left">
+                    <label>Date Type</label>
+                    <select t-model="state.date_type" t-on-change="() => this.onFilterChange()">
+                        <t t-foreach="dateOptions" t-as="opt" t-key="opt.value">
+                            <option t-att-value="opt.value" t-esc="opt.label"/>
+                        </t>
+                    </select>
+                    <label>From</label>
+                    <input type="date" t-model="state.date_from" t-on-change="() => this.onFilterChange()"/>
+                    <label>To</label>
+                    <input type="date" t-model="state.date_to" t-on-change="() => this.onFilterChange()"/>
+                </div>
+            </div>
+
+            <div class="o_hdk_presets">
+                <t t-foreach="presets" t-as="p" t-key="p.id">
+                    <button class="btn btn-sm"
+                            t-att-class="state.preset === p.id ? 'btn-primary' : 'btn-light'"
+                            t-on-click="() => this.onPresetClick(p.id)"
+                            t-esc="p.label"/>
+                </t>
+            </div>
+
+            <div t-if="state.loading" class="o_hdk_loading">
+                <i class="fa fa-spinner fa-spin fa-2x"/>
+                <p>Loading sales dashboard...</p>
+            </div>
+            <div t-elif="state.error" class="alert alert-danger">
+                <strong>Error:</strong> <t t-esc="state.error"/>
+            </div>
+
+            <t t-elif="state.data">
+                <!-- Headline KPIs -->
+                <div class="o_hdk_kpis">
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Total Orders</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtInt(state.data.totals.order_count)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Revenue</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtMoney(state.data.totals.revenue)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Avg Order Value</span>
+                        <span class="o_hdk_kpi_value" t-esc="fmtMoney(state.data.totals.aov)"/>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Avg Fulfillment</span>
+                        <span class="o_hdk_kpi_value">
+                            <t t-esc="fmtNum(state.data.totals.avg_fulfill_days, 2)"/>
+                        </span>
+                        <span class="o_hdk_kpi_sub">days</span>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Avg Cash Cycle</span>
+                        <span class="o_hdk_kpi_value">
+                            <t t-esc="fmtNum(state.data.totals.avg_cash_days, 2)"/>
+                        </span>
+                        <span class="o_hdk_kpi_sub">days</span>
+                    </div>
+                    <div class="o_hdk_kpi">
+                        <span class="o_hdk_kpi_label">Avg Production</span>
+                        <span class="o_hdk_kpi_value">
+                            <t t-esc="fmtNum(state.data.totals.avg_hours_per_order, 2)"/>
+                        </span>
+                        <span class="o_hdk_kpi_sub">hrs / order</span>
+                    </div>
+                    <div class="o_hdk_kpi o_hdk_kpi_warn" t-if="state.data.refunds.refund_count > 0">
+                        <span class="o_hdk_kpi_label">Refund Rate</span>
+                        <span class="o_hdk_kpi_value">
+                            <t t-esc="fmtNum(state.data.refunds.refund_rate_pct, 2)"/>%
+                        </span>
+                        <span class="o_hdk_kpi_sub">
+                            <t t-esc="fmtInt(state.data.refunds.refund_count)"/> notes,
+                            <t t-esc="fmtMoney(state.data.refunds.refund_value)"/>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Channel breakdown -->
+                <div class="o_hdk_card">
+                    <div class="o_hdk_card_head">
+                        <h4>Channel Breakdown</h4>
+                        <small class="text-muted">All three time metrics side by side. Click any row for the order list.</small>
+                    </div>
+                    <table class="o_hdk_table">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th class="text-end">Orders</th>
+                                <th class="text-end">Revenue</th>
+                                <th class="text-end">AOV</th>
+                                <th class="text-end">Fulfill (d)</th>
+                                <th class="text-end">Cash Cycle (d)</th>
+                                <th class="text-end">Production (hrs/order)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.channels" t-as="ch" t-key="ch.key"
+                                class="o_hdk_row_click"
+                                t-on-click="() => this.onChannelClick(ch)">
+                                <td>
+                                    <span class="o_hdk_dot" t-att-style="'background:' + colorFor(ch.name)"/>
+                                    <t t-esc="ch.name"/>
+                                </td>
+                                <td class="text-end" t-esc="fmtInt(ch.order_count)"/>
+                                <td class="text-end" t-esc="fmtMoney(ch.revenue)"/>
+                                <td class="text-end" t-esc="fmtMoney(ch.aov)"/>
+                                <td class="text-end" t-esc="fmtNum(ch.avg_fulfill_days, 2)"/>
+                                <td class="text-end" t-esc="fmtNum(ch.avg_cash_days, 2)"/>
+                                <td class="text-end" t-esc="fmtNum(ch.avg_hours_per_order, 2)"/>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="o_hdk_total_row">
+                                <td><strong>Total</strong></td>
+                                <td class="text-end" t-esc="fmtInt(state.data.totals.order_count)"/>
+                                <td class="text-end" t-esc="fmtMoney(state.data.totals.revenue)"/>
+                                <td class="text-end" t-esc="fmtMoney(state.data.totals.aov)"/>
+                                <td class="text-end" t-esc="fmtNum(state.data.totals.avg_fulfill_days, 2)"/>
+                                <td class="text-end" t-esc="fmtNum(state.data.totals.avg_cash_days, 2)"/>
+                                <td class="text-end" t-esc="fmtNum(state.data.totals.avg_hours_per_order, 2)"/>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- New vs Repeat customers per channel -->
+                <div class="o_hdk_card" t-if="state.data.new_vs_repeat.length">
+                    <div class="o_hdk_card_head">
+                        <h4>New vs Repeat Customers</h4>
+                        <small class="text-muted">A customer is "new" if their first-ever order falls inside the selected range.</small>
+                    </div>
+                    <table class="o_hdk_table">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th class="text-end">New Customers</th>
+                                <th class="text-end">New Orders</th>
+                                <th class="text-end">New Revenue</th>
+                                <th class="text-end">Repeat Customers</th>
+                                <th class="text-end">Repeat Orders</th>
+                                <th class="text-end">Repeat Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.new_vs_repeat" t-as="r" t-key="r.name">
+                                <td>
+                                    <span class="o_hdk_dot" t-att-style="'background:' + colorFor(r.name)"/>
+                                    <t t-esc="r.name"/>
+                                </td>
+                                <td class="text-end" t-esc="fmtInt(r.new.customers)"/>
+                                <td class="text-end" t-esc="fmtInt(r.new.orders)"/>
+                                <td class="text-end" t-esc="fmtMoney(r.new.revenue)"/>
+                                <td class="text-end" t-esc="fmtInt(r.repeat.customers)"/>
+                                <td class="text-end" t-esc="fmtInt(r.repeat.orders)"/>
+                                <td class="text-end" t-esc="fmtMoney(r.repeat.revenue)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="o_hdk_two_col">
+                    <!-- Top products -->
+                    <div class="o_hdk_card">
+                        <div class="o_hdk_card_head o_hdk_head_with_toggle">
+                            <h4>Top 10 Products</h4>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn"
+                                        t-att-class="state.product_sort === 'units' ? 'btn-primary' : 'btn-light'"
+                                        t-on-click="() => this.setProductSort('units')">Units</button>
+                                <button class="btn"
+                                        t-att-class="state.product_sort === 'revenue' ? 'btn-primary' : 'btn-light'"
+                                        t-on-click="() => this.setProductSort('revenue')">Revenue</button>
+                            </div>
+                        </div>
+                        <table class="o_hdk_table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-end">Units</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="sortedProducts" t-as="p" t-key="p.template_id">
+                                    <td t-esc="p.name"/>
+                                    <td class="text-end" t-esc="fmtInt(Math.round(p.units))"/>
+                                    <td class="text-end" t-esc="fmtMoney(p.revenue)"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Top customers -->
+                    <div class="o_hdk_card">
+                        <div class="o_hdk_card_head">
+                            <h4>Top 10 Customers</h4>
+                        </div>
+                        <table class="o_hdk_table">
+                            <thead>
+                                <tr>
+                                    <th>Customer</th>
+                                    <th class="text-end">Orders</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="state.data.top_customers" t-as="c" t-key="c.partner_id">
+                                    <td t-esc="c.name"/>
+                                    <td class="text-end" t-esc="fmtInt(c.order_count)"/>
+                                    <td class="text-end" t-esc="fmtMoney(c.revenue)"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Daily trend (orders count) -->
+                <div class="o_hdk_card" t-if="state.data.daily_trend.points.length">
+                    <div class="o_hdk_card_head">
+                        <h4>Orders Trend</h4>
+                        <small class="text-muted">
+                            Order count per <t t-esc="state.data.daily_trend.bucket"/>.
+                        </small>
+                    </div>
+                    <BarChart points="trendBars" bucket="state.data.daily_trend.bucket"/>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>
