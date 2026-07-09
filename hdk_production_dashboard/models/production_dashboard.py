@@ -85,48 +85,138 @@ class ProductionDashboard(models.AbstractModel):
     # ------------------------------------------------------------------
     @api.model
     def _aggregate_sale_orders(self, so_col, df, dt):
-        # Excludes cancelled SOs. Includes draft+sent+sale+done so that
-        # the same row makes sense whether the user looks forward (planned
-        # production) or backward (delivered).
+        # Two SQL passes:
+        #   1. Per-SO snapshot from sale_order alone — one row per order —
+        #      so amount_total is not multiplied by the number of lines and
+        #      each order's own currency + date is available for conversion.
+        #   2. Per-instance minutes + incomplete flag from the sale_order_line
+        #      join — line-level rollups belong here.
+        # We aggregate in Python so amounts can be summed in the SO's native
+        # currency (per Shopify instance) and, in parallel, converted to the
+        # company currency for the grand-totals row.
+        #
+        # Excludes cancelled SOs. Includes draft+sent+sale+done so the same
+        # row makes sense whether the user looks forward (planned production)
+        # or backward (delivered).
         self.env.cr.execute(
             f"""
             SELECT
-                COALESCE(si.id, 0)                                AS instance_id,
-                COALESCE(si.name, 'Direct / Other')               AS channel_name,
-                COUNT(DISTINCT so.id)                             AS order_count,
-                COALESCE(SUM(so.amount_total), 0.0)               AS order_value,
-                COALESCE(SUM(
-                    sol.product_uom_qty * COALESCE(bt.minutes_per_unit, 0)
-                ), 0.0)                                           AS minutes,
-                COUNT(DISTINCT so.id) FILTER (
-                    WHERE bt.id IS NOT NULL AND bt.has_bom AND bt.operation_count = 0
-                )                                                 AS incomplete_orders
+                so.id,
+                COALESCE(so.shopify_instance_id, 0) AS instance_id,
+                so.amount_total,
+                so.currency_id,
+                so.company_id,
+                so.date_order
             FROM sale_order so
-            JOIN sale_order_line sol           ON sol.order_id = so.id
-            LEFT JOIN hdk_product_bom_time bt  ON bt.product_id = sol.product_id
-            LEFT JOIN shopify_instance_ept si  ON si.id = so.shopify_instance_id
             WHERE so.state IN ('draft','sent','sale','done')
               AND so.{so_col} BETWEEN %s AND %s
-              AND sol.display_type IS NULL
-            GROUP BY si.id, si.name
-            ORDER BY si.id NULLS LAST
             """,
             [df, dt],
         )
+        so_rows = self.env.cr.dictfetchall()
+
+        self.env.cr.execute(
+            f"""
+            SELECT
+                COALESCE(so.shopify_instance_id, 0) AS instance_id,
+                COALESCE(SUM(
+                    sol.product_uom_qty * COALESCE(bt.minutes_per_unit, 0)
+                ), 0.0) AS minutes,
+                COUNT(DISTINCT so.id) FILTER (
+                    WHERE bt.id IS NOT NULL AND bt.has_bom AND bt.operation_count = 0
+                ) AS incomplete_orders
+            FROM sale_order so
+            JOIN sale_order_line sol           ON sol.order_id = so.id
+            LEFT JOIN hdk_product_bom_time bt  ON bt.product_id = sol.product_id
+            WHERE so.state IN ('draft','sent','sale','done')
+              AND so.{so_col} BETWEEN %s AND %s
+              AND sol.display_type IS NULL
+            GROUP BY so.shopify_instance_id
+            """,
+            [df, dt],
+        )
+        minutes_by_inst = {r["instance_id"]: r for r in self.env.cr.dictfetchall()}
+
+        Currency = self.env["res.currency"]
+        Company = self.env["res.company"]
+        company_currency = self.env.company.currency_id
+
+        # Cache Shopify instance names
+        inst_ids = {r["instance_id"] for r in so_rows if r["instance_id"]}
+        inst_name_by_id = {}
+        if inst_ids and "shopify.instance.ept" in self.env:
+            for si in self.env["shopify.instance.ept"].browse(list(inst_ids)):
+                inst_name_by_id[si.id] = si.name
+
+        # Aggregate per instance
+        buckets = {}
+        for r in so_rows:
+            inst_id = r["instance_id"] or 0
+            b = buckets.setdefault(inst_id, {
+                "order_count": 0,
+                "native_by_currency": {},  # currency_id -> sum
+                "value_company": 0.0,
+            })
+            b["order_count"] += 1
+            amount = r["amount_total"] or 0.0
+            cur_id = r["currency_id"]
+            b["native_by_currency"][cur_id] = (
+                b["native_by_currency"].get(cur_id, 0.0) + amount
+            )
+            if cur_id and cur_id != company_currency.id:
+                from_cur = Currency.browse(cur_id)
+                company = Company.browse(r["company_id"]) if r["company_id"] else self.env.company
+                b["value_company"] += from_cur._convert(
+                    amount, company_currency, company,
+                    r["date_order"] or df, round=False,
+                )
+            else:
+                b["value_company"] += amount
+
         rows = []
-        for r in self.env.cr.dictfetchall():
-            key = "shopify_%s" % r["instance_id"] if r["instance_id"] else CHANNEL_DIRECT_KEY
+        for inst_id, b in buckets.items():
+            m = minutes_by_inst.get(inst_id, {})
+            minutes = float(m.get("minutes") or 0.0)
+            if inst_id:
+                name = inst_name_by_id.get(inst_id) or f"Shopify {inst_id}"
+                key = f"shopify_{inst_id}"
+            else:
+                name = "Direct / Other"
+                key = CHANNEL_DIRECT_KEY
+
+            # Row displays in native currency when the instance's orders all
+            # share one currency (typical Shopify-per-region setup). If mixed,
+            # fall back to company-currency and mark accordingly.
+            native = b["native_by_currency"]
+            if len(native) == 1:
+                cur_id, native_amount = next(iter(native.items()))
+                cur = Currency.browse(cur_id) if cur_id else company_currency
+                display_amount = native_amount
+                display_symbol = cur.symbol or ""
+                display_position = cur.position or "before"
+                currency_mixed = False
+            else:
+                display_amount = b["value_company"]
+                display_symbol = company_currency.symbol or ""
+                display_position = company_currency.position or "before"
+                currency_mixed = True
+
             rows.append({
                 "key": key,
-                "instance_id": r["instance_id"] or False,
-                "name": r["channel_name"],
+                "instance_id": inst_id or False,
+                "name": name,
                 "kind": "sale",
-                "order_count": int(r["order_count"]),
-                "order_value": float(r["order_value"]),
-                "minutes": float(r["minutes"]),
-                "hours": round(float(r["minutes"]) / 60.0, 2),
-                "incomplete_orders": int(r["incomplete_orders"]),
+                "order_count": b["order_count"],
+                "order_value": round(display_amount, 2),
+                "order_value_company": round(b["value_company"], 2),
+                "currency_symbol": display_symbol,
+                "currency_position": display_position,
+                "currency_mixed": currency_mixed,
+                "minutes": minutes,
+                "hours": round(minutes / 60.0, 2),
+                "incomplete_orders": int(m.get("incomplete_orders") or 0),
             })
+        rows.sort(key=lambda r: (r["instance_id"] is False, r["instance_id"] or 0))
         return rows
 
     # ------------------------------------------------------------------
@@ -159,13 +249,19 @@ class ProductionDashboard(models.AbstractModel):
         if not count:
             return None
         minutes = float(r.get("minutes") or 0.0)
+        value = float(r.get("value") or 0.0)
+        company_currency = self.env.company.currency_id
         return {
             "key": CHANNEL_TRANSFER_KEY,
             "instance_id": False,
             "name": "Transfers",
             "kind": "transfer",
             "order_count": count,
-            "order_value": float(r.get("value") or 0.0),
+            "order_value": round(value, 2),
+            "order_value_company": round(value, 2),
+            "currency_symbol": company_currency.symbol or "",
+            "currency_position": company_currency.position or "before",
+            "currency_mixed": False,
             "minutes": minutes,
             "hours": round(minutes / 60.0, 2),
             "incomplete_orders": 0,
@@ -173,9 +269,11 @@ class ProductionDashboard(models.AbstractModel):
 
     @api.model
     def _totals(self, rows):
+        # Grand-total row is always in company currency — that is the only
+        # meaningful sum across channels that may hold different currencies.
         return {
             "order_count": sum(r["order_count"] for r in rows),
-            "order_value": sum(r["order_value"] for r in rows),
+            "order_value": round(sum(r.get("order_value_company") or 0.0 for r in rows), 2),
             "minutes":     sum(r["minutes"] for r in rows),
             "hours":       round(sum(r["minutes"] for r in rows) / 60.0, 2),
         }

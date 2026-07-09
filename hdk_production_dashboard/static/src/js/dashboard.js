@@ -161,15 +161,19 @@ export class ProductionDashboard extends Component {
         return CHANNEL_COLORS[name] || "#6c757d";
     }
 
-    fmtMoney(value) {
-        const cur = this.state.data && this.state.data.currency;
-        const sym = cur ? cur.symbol : "";
-        const pos = cur ? cur.position : "before";
+    fmtMoney(value, symbol, position) {
+        // symbol/position optional — fall back to company currency when the
+        // caller doesn't hand a per-row currency (e.g. grand-totals row).
+        if (symbol === undefined) {
+            const cur = this.state.data && this.state.data.currency;
+            symbol = cur ? cur.symbol : "";
+            position = cur ? cur.position : "before";
+        }
         const num = (value || 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
-        return pos === "after" ? `${num} ${sym}` : `${sym}${num}`;
+        return position === "after" ? `${num} ${symbol}` : `${symbol}${num}`;
     }
 
     fmtInt(value) {

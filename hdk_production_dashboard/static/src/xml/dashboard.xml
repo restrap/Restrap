@@ -134,7 +134,8 @@
                                     <span t-if="ch.kind === 'transfer'" class="badge text-bg-light ms-2">Stock</span>
                                 </td>
                                 <td class="text-end" t-esc="fmtInt(ch.order_count)"/>
-                                <td class="text-end" t-esc="fmtMoney(ch.order_value)"/>
+                                <td class="text-end"
+                                    t-esc="fmtMoney(ch.order_value, ch.currency_symbol, ch.currency_position)"/>
                                 <td class="text-end" t-esc="fmtInt(Math.round(ch.minutes))"/>
                                 <td class="text-end fw-bold" t-esc="fmtHours(ch.hours)"/>
                             </tr>
