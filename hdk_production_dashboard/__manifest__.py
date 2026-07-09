@@ -1,7 +1,7 @@
 {
     "name": "Restrap Production Time Dashboard",
     "summary": "Custom dashboard showing required production time across Shopify channels and internal transfers.",
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.0",
     "category": "Manufacturing",
     "author": "Hamdek",
     "website": "https://hamdek.com",
