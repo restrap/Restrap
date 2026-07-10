@@ -53,6 +53,7 @@ class SalesDashboard(models.AbstractModel):
             "totals":   totals,
             "top_products":  self._top_products(so_col, df, dt),
             "top_customers": self._top_customers(so_col, df, dt),
+            "salespersons":  self._sales_by_salesperson(so_col, df, dt),
             "daily_trend":   self._daily_trend(so_col, df, dt),
             "new_vs_repeat": self._new_vs_repeat(so_col, df, dt),
             "refunds":       self._refund_stats(so_col, df, dt),
@@ -256,6 +257,40 @@ class SalesDashboard(models.AbstractModel):
         ]
 
     # ------------------------------------------------------------------
+    # Sales by salesperson: orders + revenue attributed to user_id on SO.
+    # ------------------------------------------------------------------
+    @api.model
+    def _sales_by_salesperson(self, so_col, df, dt):
+        self.env.cr.execute(
+            f"""
+            SELECT
+                ru.id                    AS user_id,
+                COALESCE(rp.name, 'Unassigned') AS name,
+                COUNT(so.id)             AS order_count,
+                COALESCE(SUM(so.amount_total), 0) AS revenue,
+                COALESCE(AVG(so.amount_total), 0) AS aov
+            FROM sale_order so
+            LEFT JOIN res_users ru   ON ru.id = so.user_id
+            LEFT JOIN res_partner rp ON rp.id = ru.partner_id
+            WHERE so.state IN ('sale','done')
+              AND so.{so_col} BETWEEN %s AND %s
+            GROUP BY ru.id, rp.name
+            ORDER BY revenue DESC NULLS LAST
+            """,
+            [df, dt],
+        )
+        return [
+            {
+                "user_id": r["user_id"] or False,
+                "name": r["name"],
+                "order_count": int(r["order_count"]),
+                "revenue": float(r["revenue"] or 0.0),
+                "aov":     float(r["aov"] or 0.0),
+            }
+            for r in self.env.cr.dictfetchall()
+        ]
+
+    # ------------------------------------------------------------------
     # Daily trend: orders + revenue per bucket. Same bucket-sizing rule
     # as the production dashboard.
     # ------------------------------------------------------------------
@@ -401,15 +436,19 @@ class SalesDashboard(models.AbstractModel):
     # Drilldown to SO list view.
     # ------------------------------------------------------------------
     @api.model
-    def action_drilldown(self, channel_key, date_type, date_from, date_to,
-                          instance_id=False):
+    def _base_date_domain(self, date_type, date_from, date_to):
         so_col = DATE_FIELD_MAP[date_type]
         df, dt = self._parse_range(date_from, date_to)
-        domain = [
+        return so_col, [
             ("state", "in", ("sale", "done")),
             (so_col, ">=", fields.Datetime.to_string(df)),
             (so_col, "<=", fields.Datetime.to_string(dt)),
         ]
+
+    @api.model
+    def action_drilldown(self, channel_key, date_type, date_from, date_to,
+                          instance_id=False):
+        _so_col, domain = self._base_date_domain(date_type, date_from, date_to)
         if instance_id:
             domain.append(("shopify_instance_id", "=", instance_id))
         else:
@@ -421,6 +460,104 @@ class SalesDashboard(models.AbstractModel):
             "view_mode": "tree,form",
             "domain": domain,
         }
+
+    @api.model
+    def action_drilldown_salesperson(self, user_id, date_type, date_from, date_to):
+        _so_col, domain = self._base_date_domain(date_type, date_from, date_to)
+        domain.append(("user_id", "=", user_id if user_id else False))
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Sales Orders",
+            "res_model": "sale.order",
+            "view_mode": "tree,form",
+            "domain": domain,
+        }
+
+    @api.model
+    def action_drilldown_product(self, template_id, date_type, date_from, date_to):
+        _so_col, so_domain = self._base_date_domain(date_type, date_from, date_to)
+        # SO lines filtered on this template + orders in-range.
+        so_ids = self.env["sale.order"].search(so_domain).ids
+        line_domain = [
+            ("order_id", "in", so_ids),
+            ("product_id.product_tmpl_id", "=", template_id),
+            ("display_type", "=", False),
+        ]
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Order Lines",
+            "res_model": "sale.order.line",
+            "view_mode": "tree,form",
+            "domain": line_domain,
+        }
+
+    @api.model
+    def action_drilldown_customer(self, partner_id, date_type, date_from, date_to):
+        _so_col, domain = self._base_date_domain(date_type, date_from, date_to)
+        domain.append(("partner_id", "=", partner_id))
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Sales Orders",
+            "res_model": "sale.order",
+            "view_mode": "tree,form",
+            "domain": domain,
+        }
+
+    # ------------------------------------------------------------------
+    # CSV export. Returns a header row + data rows for one dashboard
+    # section so the controller can stream a single CSV file.
+    # ------------------------------------------------------------------
+    @api.model
+    def get_csv_export(self, section, date_type, date_from, date_to):
+        if date_type not in DATE_FIELD_MAP:
+            raise UserError("Unknown date filter '%s'." % date_type)
+        so_col = DATE_FIELD_MAP[date_type]
+        df, dt = self._parse_range(date_from, date_to)
+
+        if section == "channels":
+            rows = self._aggregate_channels(so_col, df, dt)
+            header = ["Channel", "Orders", "Revenue", "AOV",
+                      "Avg Fulfill (days)", "Avg Cash Cycle (days)",
+                      "Avg Production (hrs/order)"]
+            data = [
+                [r["name"], r["order_count"], r["revenue"], r["aov"],
+                 r["avg_fulfill_days"], r["avg_cash_days"],
+                 r["avg_hours_per_order"]]
+                for r in rows
+            ]
+        elif section == "top_products":
+            rows = self._top_products(so_col, df, dt)
+            header = ["Product", "Units", "Revenue"]
+            data = [[r["name"], r["units"], r["revenue"]] for r in rows]
+        elif section == "top_customers":
+            rows = self._top_customers(so_col, df, dt)
+            header = ["Customer", "Orders", "Revenue"]
+            data = [[r["name"], r["order_count"], r["revenue"]] for r in rows]
+        elif section == "salespersons":
+            rows = self._sales_by_salesperson(so_col, df, dt)
+            header = ["Salesperson", "Orders", "Revenue", "AOV"]
+            data = [[r["name"], r["order_count"], r["revenue"], r["aov"]]
+                    for r in rows]
+        elif section == "new_vs_repeat":
+            rows = self._new_vs_repeat(so_col, df, dt)
+            header = ["Channel",
+                      "New Customers", "New Orders", "New Revenue",
+                      "Repeat Customers", "Repeat Orders", "Repeat Revenue"]
+            data = [
+                [r["name"],
+                 r["new"]["customers"], r["new"]["orders"], r["new"]["revenue"],
+                 r["repeat"]["customers"], r["repeat"]["orders"], r["repeat"]["revenue"]]
+                for r in rows
+            ]
+        elif section == "daily_trend":
+            trend = self._daily_trend(so_col, df, dt)
+            header = ["Bucket (%s)" % trend["bucket"], "Orders", "Revenue"]
+            data = [[p["date"], p["orders"], p["revenue"]]
+                    for p in trend["points"]]
+        else:
+            raise UserError("Unknown export section '%s'." % section)
+
+        return {"header": header, "rows": data}
 
 
 def _safe_round(value, ndigits):

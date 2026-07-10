@@ -1,7 +1,7 @@
 {
     "name": "Restrap Sales Dashboard",
     "summary": "Channel-split sales dashboard: revenue, AOV, fulfillment time, cash cycle and production time per order.",
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.0",
     "category": "Sales",
     "author": "Hamdek",
     "website": "https://hamdek.com",

@@ -125,6 +125,69 @@ export class SalesDashboard extends Component {
         }
     }
 
+    async onSalespersonClick(row) {
+        try {
+            const act = await this.rpc(
+                "/hdk_sales_dashboard/drilldown/salesperson",
+                {
+                    user_id: row.user_id,
+                    date_type: this.state.date_type,
+                    date_from: this.state.date_from,
+                    date_to: this.state.date_to,
+                },
+            );
+            await this.action.doAction(act);
+        } catch (err) {
+            this.notification.add(err.message || String(err), { type: "danger" });
+        }
+    }
+
+    async onProductClick(row) {
+        try {
+            const act = await this.rpc(
+                "/hdk_sales_dashboard/drilldown/product",
+                {
+                    template_id: row.template_id,
+                    date_type: this.state.date_type,
+                    date_from: this.state.date_from,
+                    date_to: this.state.date_to,
+                },
+            );
+            await this.action.doAction(act);
+        } catch (err) {
+            this.notification.add(err.message || String(err), { type: "danger" });
+        }
+    }
+
+    async onCustomerClick(row) {
+        try {
+            const act = await this.rpc(
+                "/hdk_sales_dashboard/drilldown/customer",
+                {
+                    partner_id: row.partner_id,
+                    date_type: this.state.date_type,
+                    date_from: this.state.date_from,
+                    date_to: this.state.date_to,
+                },
+            );
+            await this.action.doAction(act);
+        } catch (err) {
+            this.notification.add(err.message || String(err), { type: "danger" });
+        }
+    }
+
+    exportCsv(section) {
+        const params = new URLSearchParams({
+            section: section,
+            date_type: this.state.date_type,
+            date_from: this.state.date_from,
+            date_to: this.state.date_to,
+        });
+        window.location.assign(
+            `/hdk_sales_dashboard/export?${params.toString()}`
+        );
+    }
+
     colorFor(name) {
         return CHANNEL_COLORS[name] || "#6c757d";
     }

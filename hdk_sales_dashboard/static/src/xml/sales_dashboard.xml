@@ -86,9 +86,15 @@
 
                 <!-- Channel breakdown -->
                 <div class="o_hdk_card">
-                    <div class="o_hdk_card_head">
-                        <h4>Channel Breakdown</h4>
-                        <small class="text-muted">All three time metrics side by side. Click any row for the order list.</small>
+                    <div class="o_hdk_card_head o_hdk_head_with_toggle">
+                        <div>
+                            <h4>Channel Breakdown</h4>
+                            <small class="text-muted">All three time metrics side by side. Click any row for the order list.</small>
+                        </div>
+                        <button class="btn btn-sm btn-light"
+                                t-on-click="() => this.exportCsv('channels')">
+                            <i class="fa fa-download"/> CSV
+                        </button>
                     </div>
                     <table class="o_hdk_table">
                         <thead>
@@ -132,11 +138,52 @@
                     </table>
                 </div>
 
+                <!-- Sales by Salesperson -->
+                <div class="o_hdk_card" t-if="state.data.salespersons.length">
+                    <div class="o_hdk_card_head o_hdk_head_with_toggle">
+                        <div>
+                            <h4>Sales by Salesperson</h4>
+                            <small class="text-muted">Orders + revenue attributed to the assigned salesperson on the SO. Click a row to open its orders.</small>
+                        </div>
+                        <button class="btn btn-sm btn-light"
+                                t-on-click="() => this.exportCsv('salespersons')">
+                            <i class="fa fa-download"/> CSV
+                        </button>
+                    </div>
+                    <table class="o_hdk_table">
+                        <thead>
+                            <tr>
+                                <th>Salesperson</th>
+                                <th class="text-end">Orders</th>
+                                <th class="text-end">Revenue</th>
+                                <th class="text-end">AOV</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.salespersons" t-as="sp"
+                                t-key="sp.user_id || 'unassigned'"
+                                class="o_hdk_row_click"
+                                t-on-click="() => this.onSalespersonClick(sp)">
+                                <td t-esc="sp.name"/>
+                                <td class="text-end" t-esc="fmtInt(sp.order_count)"/>
+                                <td class="text-end" t-esc="fmtMoney(sp.revenue)"/>
+                                <td class="text-end" t-esc="fmtMoney(sp.aov)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
                 <!-- New vs Repeat customers per channel -->
                 <div class="o_hdk_card" t-if="state.data.new_vs_repeat.length">
-                    <div class="o_hdk_card_head">
-                        <h4>New vs Repeat Customers</h4>
-                        <small class="text-muted">A customer is "new" if their first-ever order falls inside the selected range.</small>
+                    <div class="o_hdk_card_head o_hdk_head_with_toggle">
+                        <div>
+                            <h4>New vs Repeat Customers</h4>
+                            <small class="text-muted">A customer is "new" if their first-ever order falls inside the selected range.</small>
+                        </div>
+                        <button class="btn btn-sm btn-light"
+                                t-on-click="() => this.exportCsv('new_vs_repeat')">
+                            <i class="fa fa-download"/> CSV
+                        </button>
                     </div>
                     <table class="o_hdk_table">
                         <thead>
@@ -172,13 +219,19 @@
                     <div class="o_hdk_card">
                         <div class="o_hdk_card_head o_hdk_head_with_toggle">
                             <h4>Top 10 Products</h4>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn"
-                                        t-att-class="state.product_sort === 'units' ? 'btn-primary' : 'btn-light'"
-                                        t-on-click="() => this.setProductSort('units')">Units</button>
-                                <button class="btn"
-                                        t-att-class="state.product_sort === 'revenue' ? 'btn-primary' : 'btn-light'"
-                                        t-on-click="() => this.setProductSort('revenue')">Revenue</button>
+                            <div class="o_hdk_card_actions">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn"
+                                            t-att-class="state.product_sort === 'units' ? 'btn-primary' : 'btn-light'"
+                                            t-on-click="() => this.setProductSort('units')">Units</button>
+                                    <button class="btn"
+                                            t-att-class="state.product_sort === 'revenue' ? 'btn-primary' : 'btn-light'"
+                                            t-on-click="() => this.setProductSort('revenue')">Revenue</button>
+                                </div>
+                                <button class="btn btn-sm btn-light"
+                                        t-on-click="() => this.exportCsv('top_products')">
+                                    <i class="fa fa-download"/> CSV
+                                </button>
                             </div>
                         </div>
                         <table class="o_hdk_table">
@@ -190,7 +243,9 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr t-foreach="sortedProducts" t-as="p" t-key="p.template_id">
+                                <tr t-foreach="sortedProducts" t-as="p" t-key="p.template_id"
+                                    class="o_hdk_row_click"
+                                    t-on-click="() => this.onProductClick(p)">
                                     <td t-esc="p.name"/>
                                     <td class="text-end" t-esc="fmtInt(Math.round(p.units))"/>
                                     <td class="text-end" t-esc="fmtMoney(p.revenue)"/>
@@ -201,8 +256,12 @@
 
                     <!-- Top customers -->
                     <div class="o_hdk_card">
-                        <div class="o_hdk_card_head">
+                        <div class="o_hdk_card_head o_hdk_head_with_toggle">
                             <h4>Top 10 Customers</h4>
+                            <button class="btn btn-sm btn-light"
+                                    t-on-click="() => this.exportCsv('top_customers')">
+                                <i class="fa fa-download"/> CSV
+                            </button>
                         </div>
                         <table class="o_hdk_table">
                             <thead>
@@ -213,7 +272,9 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr t-foreach="state.data.top_customers" t-as="c" t-key="c.partner_id">
+                                <tr t-foreach="state.data.top_customers" t-as="c" t-key="c.partner_id"
+                                    class="o_hdk_row_click"
+                                    t-on-click="() => this.onCustomerClick(c)">
                                     <td t-esc="c.name"/>
                                     <td class="text-end" t-esc="fmtInt(c.order_count)"/>
                                     <td class="text-end" t-esc="fmtMoney(c.revenue)"/>
@@ -225,11 +286,17 @@
 
                 <!-- Daily trend (orders count) -->
                 <div class="o_hdk_card" t-if="state.data.daily_trend.points.length">
-                    <div class="o_hdk_card_head">
-                        <h4>Orders Trend</h4>
-                        <small class="text-muted">
-                            Order count per <t t-esc="state.data.daily_trend.bucket"/>.
-                        </small>
+                    <div class="o_hdk_card_head o_hdk_head_with_toggle">
+                        <div>
+                            <h4>Orders Trend</h4>
+                            <small class="text-muted">
+                                Order count per <t t-esc="state.data.daily_trend.bucket"/>.
+                            </small>
+                        </div>
+                        <button class="btn btn-sm btn-light"
+                                t-on-click="() => this.exportCsv('daily_trend')">
+                            <i class="fa fa-download"/> CSV
+                        </button>
                     </div>
                     <BarChart points="trendBars" bucket="state.data.daily_trend.bucket"/>
                 </div>

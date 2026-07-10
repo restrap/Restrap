@@ -16,6 +16,14 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
         h4 { margin: 0; }
+        small { display: block; margin-top: 2px; }
+    }
+
+    .o_hdk_card_actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 }
