@@ -264,9 +264,9 @@ class SalesDashboard(models.AbstractModel):
         self.env.cr.execute(
             f"""
             SELECT
-                ru.id                    AS user_id,
-                COALESCE(rp.name, 'Unassigned') AS name,
-                COUNT(so.id)             AS order_count,
+                ru.id                             AS user_id,
+                rp.name                           AS name,
+                COUNT(so.id)                      AS order_count,
                 COALESCE(SUM(so.amount_total), 0) AS revenue,
                 COALESCE(AVG(so.amount_total), 0) AS aov
             FROM sale_order so
@@ -279,16 +279,22 @@ class SalesDashboard(models.AbstractModel):
             """,
             [df, dt],
         )
-        return [
-            {
+        out = []
+        for r in self.env.cr.dictfetchall():
+            # res_partner.name may be a jsonb in some deployments — normalise.
+            name = r["name"]
+            if isinstance(name, dict):
+                name = name.get(self.env.user.lang) or next(iter(name.values()), "")
+            if not name:
+                name = "Unassigned"
+            out.append({
                 "user_id": r["user_id"] or False,
-                "name": r["name"],
-                "order_count": int(r["order_count"]),
+                "name": name,
+                "order_count": int(r["order_count"] or 0),
                 "revenue": float(r["revenue"] or 0.0),
                 "aov":     float(r["aov"] or 0.0),
-            }
-            for r in self.env.cr.dictfetchall()
-        ]
+            })
+        return out
 
     # ------------------------------------------------------------------
     # Daily trend: orders + revenue per bucket. Same bucket-sizing rule
