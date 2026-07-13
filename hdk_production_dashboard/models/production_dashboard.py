@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import pytz
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -34,10 +36,17 @@ class ProductionDashboard(models.AbstractModel):
         df = fields.Date.from_string(date_from)
         dt = fields.Date.from_string(date_to)
         self._validate_range(df, dt)
-        # Inclusive end-of-day on dt.
+        # Interpret picked dates as the user's local day, then convert to
+        # naive UTC for the SQL comparisons (datetimes are stored UTC).
+        # Without this, a UK user picking 2023-08-17 misses SOs placed at
+        # 2023-08-16 23:11 UTC (= 00:11 BST on 2023-08-17).
+        tzname = self.env.context.get("tz") or self.env.user.tz or "UTC"
+        user_tz = pytz.timezone(tzname)
+        local_start = user_tz.localize(datetime.combine(df, datetime.min.time()))
+        local_end = user_tz.localize(datetime.combine(dt, datetime.max.time()))
         return (
-            datetime.combine(df, datetime.min.time()),
-            datetime.combine(dt, datetime.max.time()),
+            local_start.astimezone(pytz.UTC).replace(tzinfo=None),
+            local_end.astimezone(pytz.UTC).replace(tzinfo=None),
         )
 
     @api.model
