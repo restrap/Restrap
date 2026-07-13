@@ -474,7 +474,9 @@ class SalesDashboard(models.AbstractModel):
             "type": "ir.actions.act_window",
             "name": "Sales Orders",
             "res_model": "sale.order",
-            "view_mode": "tree,form",
+            "view_mode": "list,form",
+            "views": [[False, "list"], [False, "form"]],
+            "target": "current",
             "domain": domain,
         }
 
@@ -486,7 +488,9 @@ class SalesDashboard(models.AbstractModel):
             "type": "ir.actions.act_window",
             "name": "Sales Orders",
             "res_model": "sale.order",
-            "view_mode": "tree,form",
+            "view_mode": "list,form",
+            "views": [[False, "list"], [False, "form"]],
+            "target": "current",
             "domain": domain,
         }
 
@@ -504,7 +508,9 @@ class SalesDashboard(models.AbstractModel):
             "type": "ir.actions.act_window",
             "name": "Order Lines",
             "res_model": "sale.order.line",
-            "view_mode": "tree,form",
+            "view_mode": "list,form",
+            "views": [[False, "list"], [False, "form"]],
+            "target": "current",
             "domain": line_domain,
         }
 
@@ -516,7 +522,9 @@ class SalesDashboard(models.AbstractModel):
             "type": "ir.actions.act_window",
             "name": "Sales Orders",
             "res_model": "sale.order",
-            "view_mode": "tree,form",
+            "view_mode": "list,form",
+            "views": [[False, "list"], [False, "form"]],
+            "target": "current",
             "domain": domain,
         }
 

@@ -416,12 +416,19 @@ class ProductionDashboard(models.AbstractModel):
                           instance_id=False):
         so_col, pick_col = DATE_FIELD_MAP[date_type]
         df, dt = self._parse_range(date_from, date_to)
+        # Views must be passed as an explicit list. When the webclient
+        # receives a raw act_window dict via RPC it does not synthesise
+        # views from view_mode in all code paths, so an action with only
+        # view_mode="tree,form" trips a `Cannot read properties of
+        # undefined (reading 'map')` when the list view mounts.
         if channel_key == CHANNEL_TRANSFER_KEY:
             return {
                 "type": "ir.actions.act_window",
                 "name": "Transfers",
                 "res_model": "stock.picking",
-                "view_mode": "tree,form",
+                "view_mode": "list,form",
+                "views": [[False, "list"], [False, "form"]],
+                "target": "current",
                 "domain": [
                     ("picking_type_id.code", "=", "internal"),
                     ("state", "!=", "cancel"),
@@ -442,7 +449,9 @@ class ProductionDashboard(models.AbstractModel):
             "type": "ir.actions.act_window",
             "name": "Sales Orders",
             "res_model": "sale.order",
-            "view_mode": "tree,form",
+            "view_mode": "list,form",
+            "views": [[False, "list"], [False, "form"]],
+            "target": "current",
             "domain": domain,
         }
 
