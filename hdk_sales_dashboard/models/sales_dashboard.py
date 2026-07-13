@@ -78,6 +78,7 @@ class SalesDashboard(models.AbstractModel):
     # ------------------------------------------------------------------
     @api.model
     def _aggregate_channels(self, so_col, df, dt):
+        # ---- non-monetary aggregations (minutes, fulfill, cash) ----
         self.env.cr.execute(
             f"""
             WITH so_in_range AS (
@@ -105,10 +106,6 @@ class SalesDashboard(models.AbstractModel):
                 GROUP BY sol.order_id
             ),
             so_cash AS (
-                -- account_move_line.payment_date is non-stored in v17,
-                -- so we walk the reconcile graph instead. max_date is
-                -- the stored reconciliation date and equals the
-                -- effective settlement date for that pair.
                 SELECT
                     am.invoice_origin AS so_name,
                     MAX(apr.max_date) AS paid_at
@@ -126,8 +123,6 @@ class SalesDashboard(models.AbstractModel):
                 SELECT
                     r.*,
                     COALESCE(sm.minutes, 0) AS minutes,
-                    -- date - date returns integer days in PostgreSQL,
-                    -- not an interval, so cast and divide directly.
                     (sc.paid_at - r.date_order::date)::numeric AS cash_days
                 FROM so_in_range r
                 LEFT JOIN so_minutes sm ON sm.id = r.id
@@ -135,14 +130,12 @@ class SalesDashboard(models.AbstractModel):
                 LEFT JOIN so_cash sc    ON sc.so_name = so.name
             )
             SELECT
-                COALESCE(si.id, 0)                AS instance_id,
+                COALESCE(si.id, 0)                  AS instance_id,
                 COALESCE(si.name, 'Direct / Other') AS channel_name,
-                COUNT(*)                          AS order_count,
-                COALESCE(SUM(amount_total), 0)    AS revenue,
-                COALESCE(AVG(amount_total), 0)    AS aov,
-                AVG(fulfill_days)                 AS avg_fulfill_days,
-                AVG(cash_days)                    AS avg_cash_days,
-                AVG(minutes)                      AS avg_minutes
+                COUNT(*)                             AS order_count,
+                AVG(fulfill_days)                    AS avg_fulfill_days,
+                AVG(cash_days)                       AS avg_cash_days,
+                AVG(minutes)                         AS avg_minutes
             FROM so_enriched e
             LEFT JOIN shopify_instance_ept si ON si.id = e.shopify_instance_id
             GROUP BY si.id, si.name
@@ -150,22 +143,106 @@ class SalesDashboard(models.AbstractModel):
             """,
             [df, dt],
         )
+        meta_by_inst = {
+            r["instance_id"]: r for r in self.env.cr.dictfetchall()
+        }
+
+        # ---- per-SO currency split (mirrors production dashboard) ----
+        self.env.cr.execute(
+            f"""
+            SELECT
+                so.id,
+                COALESCE(so.shopify_instance_id, 0) AS instance_id,
+                so.amount_total,
+                so.currency_id,
+                so.company_id,
+                so.date_order
+            FROM sale_order so
+            WHERE so.state IN ('sale','done')
+              AND so.{so_col} BETWEEN %s AND %s
+            """,
+            [df, dt],
+        )
+        so_rows = self.env.cr.dictfetchall()
+
+        Currency = self.env["res.currency"]
+        Company = self.env["res.company"]
+        company_currency = self.env.company.currency_id
+
+        # Cache instance names
+        inst_ids = {r["instance_id"] for r in so_rows if r["instance_id"]}
+        inst_name_by_id = {}
+        if inst_ids and "shopify.instance.ept" in self.env:
+            for si in self.env["shopify.instance.ept"].browse(list(inst_ids)):
+                inst_name_by_id[si.id] = si.name
+
+        # Aggregate revenue per (instance, currency) + company-currency total
+        buckets = {}
+        for r in so_rows:
+            inst_id = r["instance_id"] or 0
+            b = buckets.setdefault(inst_id, {
+                "native_by_currency": {},
+                "value_company": 0.0,
+            })
+            amount = r["amount_total"] or 0.0
+            cur_id = r["currency_id"]
+            b["native_by_currency"][cur_id] = (
+                b["native_by_currency"].get(cur_id, 0.0) + amount
+            )
+            if cur_id and cur_id != company_currency.id:
+                from_cur = Currency.browse(cur_id)
+                company = Company.browse(r["company_id"]) if r["company_id"] else self.env.company
+                b["value_company"] += from_cur._convert(
+                    amount, company_currency, company,
+                    r["date_order"] or df, round=False,
+                )
+            else:
+                b["value_company"] += amount
+
         rows = []
-        for r in self.env.cr.dictfetchall():
-            instance_id = r["instance_id"] or False
-            avg_minutes = float(r["avg_minutes"] or 0.0)
+        for inst_id, meta in meta_by_inst.items():
+            b = buckets.get(inst_id, {"native_by_currency": {}, "value_company": 0.0})
+            native = b["native_by_currency"]
+            order_count = int(meta["order_count"])
+            avg_minutes = float(meta["avg_minutes"] or 0.0)
+
+            if len(native) == 1:
+                cur_id, native_amount = next(iter(native.items()))
+                cur = Currency.browse(cur_id) if cur_id else company_currency
+                display_amount = native_amount
+                display_symbol = cur.symbol or ""
+                display_position = cur.position or "before"
+                currency_mixed = False
+            else:
+                display_amount = b["value_company"]
+                display_symbol = company_currency.symbol or ""
+                display_position = company_currency.position or "before"
+                currency_mixed = True
+
+            if inst_id:
+                name = inst_name_by_id.get(inst_id) or meta["channel_name"]
+                key = "shopify_%s" % inst_id
+            else:
+                name = "Direct / Other"
+                key = CHANNEL_DIRECT_KEY
+
             rows.append({
-                "key": "shopify_%s" % instance_id if instance_id else CHANNEL_DIRECT_KEY,
-                "instance_id": instance_id,
-                "name": r["channel_name"],
-                "order_count": int(r["order_count"]),
-                "revenue": float(r["revenue"] or 0.0),
-                "aov":     float(r["aov"] or 0.0),
-                "avg_fulfill_days": _safe_round(r["avg_fulfill_days"], 2),
-                "avg_cash_days":    _safe_round(r["avg_cash_days"], 2),
+                "key": key,
+                "instance_id": inst_id or False,
+                "name": name,
+                "order_count": order_count,
+                "revenue": round(display_amount, 2),
+                "revenue_company": round(b["value_company"], 2),
+                "aov": round(display_amount / order_count, 2) if order_count else 0.0,
+                "currency_symbol": display_symbol,
+                "currency_position": display_position,
+                "currency_mixed": currency_mixed,
+                "avg_fulfill_days": _safe_round(meta["avg_fulfill_days"], 2),
+                "avg_cash_days":    _safe_round(meta["avg_cash_days"], 2),
                 "avg_minutes_per_order": round(avg_minutes, 1),
                 "avg_hours_per_order":   round(avg_minutes / 60.0, 2),
             })
+        rows.sort(key=lambda r: (r["instance_id"] is False, r["instance_id"] or 0))
         return rows
 
     @api.model
@@ -177,11 +254,12 @@ class SalesDashboard(models.AbstractModel):
                 "avg_minutes_per_order": 0.0, "avg_hours_per_order": 0.0,
             }
         orders  = sum(r["order_count"] for r in rows)
-        revenue = sum(r["revenue"] for r in rows)
+        # Totals are always in company currency (channels may have mixed native currencies)
+        revenue = sum(r["revenue_company"] for r in rows)
         return {
             "order_count": orders,
-            "revenue": revenue,
-            "aov": (revenue / orders) if orders else 0.0,
+            "revenue": round(revenue, 2),
+            "aov": round(revenue / orders, 2) if orders else 0.0,
             # Weighted averages so an outlier channel doesn't dominate.
             "avg_fulfill_days": _weighted(
                 rows, "avg_fulfill_days", "order_count", 2

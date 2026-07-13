@@ -117,8 +117,8 @@
                                     <t t-esc="ch.name"/>
                                 </td>
                                 <td class="text-end" t-esc="fmtInt(ch.order_count)"/>
-                                <td class="text-end" t-esc="fmtMoney(ch.revenue)"/>
-                                <td class="text-end" t-esc="fmtMoney(ch.aov)"/>
+                                <td class="text-end" t-esc="fmtMoney(ch.revenue, ch.currency_symbol, ch.currency_position)"/>
+                                <td class="text-end" t-esc="fmtMoney(ch.aov, ch.currency_symbol, ch.currency_position)"/>
                                 <td class="text-end" t-esc="fmtNum(ch.avg_fulfill_days, 2)"/>
                                 <td class="text-end" t-esc="fmtNum(ch.avg_cash_days, 2)"/>
                                 <td class="text-end" t-esc="fmtNum(ch.avg_hours_per_order, 2)"/>
