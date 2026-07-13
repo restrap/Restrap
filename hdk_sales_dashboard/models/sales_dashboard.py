@@ -250,7 +250,7 @@ class SalesDashboard(models.AbstractModel):
         if not rows:
             return {
                 "order_count": 0, "revenue": 0.0, "aov": 0.0,
-                "avg_fulfill_days": None, "avg_cash_days": None,
+                "avg_fulfill_days": False, "avg_cash_days": False,
                 "avg_minutes_per_order": 0.0, "avg_hours_per_order": 0.0,
             }
         orders  = sum(r["order_count"] for r in rows)
@@ -665,7 +665,7 @@ class SalesDashboard(models.AbstractModel):
 
 def _safe_round(value, ndigits):
     if value is None:
-        return None
+        return False
     return round(float(value), ndigits)
 
 
@@ -676,10 +676,10 @@ def _weighted(rows, value_key, weight_key, ndigits):
     for r in rows:
         v = r.get(value_key)
         w = r.get(weight_key) or 0
-        if v is None or w == 0:
+        if v is None or v is False or w == 0:
             continue
         num += float(v) * w
         den += w
     if not den:
-        return None
+        return False
     return round(num / den, ndigits)
