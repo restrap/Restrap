@@ -84,6 +84,7 @@ class SalesDashboard(models.AbstractModel):
             WITH so_in_range AS (
                 SELECT
                     so.id,
+                    so.name,
                     so.partner_id,
                     so.amount_total,
                     so.date_order,
@@ -105,6 +106,11 @@ class SalesDashboard(models.AbstractModel):
                 WHERE sol.display_type IS NULL
                 GROUP BY sol.order_id
             ),
+            -- Only walk the reconcile graph for invoices tied to SOs in
+            -- the report window. Without this scope the join fans out
+            -- across the full account_move_line / partial_reconcile
+            -- history (70k+ SOs, ~7.7k posted invoices on production)
+            -- and times out even for a 1-day range.
             so_cash AS (
                 SELECT
                     am.invoice_origin AS so_name,
@@ -117,6 +123,7 @@ class SalesDashboard(models.AbstractModel):
                 WHERE am.move_type = 'out_invoice'
                   AND am.state = 'posted'
                   AND am.payment_state IN ('paid','in_payment')
+                  AND am.invoice_origin IN (SELECT name FROM so_in_range)
                 GROUP BY am.invoice_origin
             ),
             so_enriched AS (
@@ -126,8 +133,7 @@ class SalesDashboard(models.AbstractModel):
                     (sc.paid_at - r.date_order::date)::numeric AS cash_days
                 FROM so_in_range r
                 LEFT JOIN so_minutes sm ON sm.id = r.id
-                LEFT JOIN sale_order so ON so.id = r.id
-                LEFT JOIN so_cash sc    ON sc.so_name = so.name
+                LEFT JOIN so_cash sc    ON sc.so_name = r.name
             )
             SELECT
                 COALESCE(si.id, 0)                  AS instance_id,
